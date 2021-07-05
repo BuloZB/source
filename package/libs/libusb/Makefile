@@ -8,18 +8,21 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=libusb
-PKG_VERSION:=1.0.20
-PKG_RELEASE:=1
+PKG_VERSION:=1.0.24
+PKG_RELEASE:=$(AUTORELEASE)
 
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.bz2
-PKG_SOURCE_URL:=@SF/$(PKG_NAME)
-PKG_HASH:=cb057190ba0a961768224e4dc6883104c6f945b2bf2ef90d7da39e7c1834f7ff
+PKG_SOURCE_URL:=\
+  https://github.com/libusb/libusb/releases/download/v$(PKG_VERSION) \
+  @SF/$(PKG_NAME)
+PKG_HASH:=7efd2685f7b327326dcfb85cee426d9b871fd70e22caa15bb68d595ce2a2b12a
+
+PKG_MAINTAINER:= Felix Fietkau <nbd@nbd.name>
+PKG_LICENSE:=LGPL-2.1-or-later
+PKG_LICENSE_FILES:=COPYING
 
 PKG_INSTALL:=1
-PKG_BUILD_PARALLEL:=0
-PKG_LICENSE:=LGPL-2.1
-
-PKG_MAINTAINER := Felix Fietkau <nbd@nbd.name>
+PKG_BUILD_PARALLEL:=1
 
 include $(INCLUDE_DIR)/package.mk
 
@@ -28,7 +31,8 @@ define Package/libusb-1.0
   CATEGORY:=Libraries
   TITLE:=A library for accessing Linux USB devices
   DEPENDS:=+libpthread +librt
-  URL:=http://libusb.wiki.sourceforge.net/
+  URL:=http://libusb.info/
+  ABI_VERSION:=0
 endef
 
 define Package/libusb-1.0/description
@@ -42,12 +46,17 @@ CONFIGURE_ARGS += \
 	--disable-log
 
 define Build/InstallDev
-	$(CP) $(PKG_INSTALL_DIR)/* $(1)/
+	$(INSTALL_DIR) $(1)/usr/include/libusb-1.0
+	$(CP) $(PKG_INSTALL_DIR)/usr/include/libusb-1.0/libusb.h $(1)/usr/include/libusb-1.0/
+	$(INSTALL_DIR) $(1)/usr/lib
+	$(CP) $(PKG_INSTALL_DIR)/usr/lib/libusb-1.0.* $(1)/usr/lib/
+	$(INSTALL_DIR) $(1)/usr/lib/pkgconfig
+	$(CP) $(PKG_INSTALL_DIR)/usr/lib/pkgconfig/libusb-1.0.pc $(1)/usr/lib/pkgconfig/
 endef
 
 define Package/libusb-1.0/install
 	$(INSTALL_DIR) $(1)/usr/lib
-	$(CP) $(PKG_INSTALL_DIR)/usr/lib/libusb*.so* $(1)/usr/lib/
+	$(CP) $(PKG_INSTALL_DIR)/usr/lib/libusb-1.0.so.* $(1)/usr/lib/
 endef
 
 $(eval $(call BuildPackage,libusb-1.0))

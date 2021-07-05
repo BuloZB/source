@@ -1,46 +1,41 @@
-# Copyright (c) 2014 The Linux Foundation. All rights reserved.
+# SPDX-License-Identifier: GPL-2.0-only
 #
+# Copyright (C) 2012-2015 OpenWrt.org
+# Copyright (C) 2016-2017 LEDE project
+
 include $(TOPDIR)/rules.mk
 include $(INCLUDE_DIR)/image.mk
 
-define Image/BuilduImage
-	$(CP) $(KDIR)/zImage$(2) $(KDIR)/zImage-$(1)$(2)
-	cat $(LINUX_DIR)/arch/arm/boot/dts/mt7623-$1.dtb >> $(KDIR)/zImage-$(1)$(2)
-	mkimage -A arm -O linux -T kernel -C none -a 0x80008000 -e 0x80008000 -n 'MIPS OpenWrt Linux-$(LINUX_VERSION)'  -d $(KDIR)/zImage-$(1)$(2) $(KDIR)/uImage-$(1)$(2)
+define Build/sysupgrade-emmc
+	rm -f $@.recovery
+	mkfs.fat -C $@.recovery 3070
+
+	./gen_$(SUBTARGET)_emmc_img.sh $@ \
+		$(IMAGE_KERNEL) \
+		$@.recovery \
+		$(IMAGE_ROOTFS)
 endef
 
-define Image/Build/SysupgradeCombined
-	$(call Image/BuilduImage,$1)
-ifneq ($(CONFIG_TARGET_ROOTFS_INITRAMFS),)
-	$(call Image/BuilduImage,$1,-initramfs)
-	$(CP) $(KDIR)/uImage-$(1)-initramfs $(BIN_DIR)/$(IMG_PREFIX)-uImage-$(1)-initramfs
-endif
-	mkdir -p "$(KDIR_TMP)/sysupgrade-$(1)/"
-	echo "BOARD=$(1)" > "$(KDIR_TMP)/sysupgrade-$(1)/CONTROL"
-	$(CP) "$(KDIR)/root.$(2)" "$(KDIR_TMP)/sysupgrade-$(1)/root"
-	$(CP) "$(KDIR)/uImage-$(1)" "$(KDIR_TMP)/sysupgrade-$(1)/kernel"
-	(cd "$(KDIR_TMP)"; $(TAR) cvf \
-		"$(BIN_DIR)/$(IMG_PREFIX)-$(1)-sysupgrade.tar" sysupgrade-$(1) \
-			$(if $(SOURCE_DATE_EPOCH),--mtime="@$(SOURCE_DATE_EPOCH)") \
-	)
+# default all platform image(fit) build 
+define Device/Default
+  PROFILES = Default $$(DEVICE_NAME)
+  KERNEL_NAME := Image
+  KERNEL = kernel-bin | lzma | \
+	fit lzma $$(KDIR)/image-$$(firstword $$(DEVICE_DTS)).dtb
+  KERNEL_INITRAMFS = kernel-bin | lzma | \
+	fit lzma $$(KDIR)/image-$$(firstword $$(DEVICE_DTS)).dtb with-initrd
+  FILESYSTEMS := squashfs
+  DEVICE_DTS_DIR := $(DTS_DIR)
+  IMAGES := sysupgrade.bin
+  IMAGE/sysupgrade.bin := append-kernel | pad-to 128k | append-rootfs | \
+	pad-rootfs | append-metadata
 endef
 
-define Image/Build/squashfs
-	$(call prepare_generic_squashfs,$(KDIR)/root.squashfs)
-	$(CP) $(KDIR)/root.squashfs $(BIN_DIR)/$(IMG_PREFIX)-root.squashfs
-
-	$(call Image/Build/SysupgradeCombined,eMMC,squashfs)
-
-	$(call Image/BuilduImage,NAND)
-ifneq ($(CONFIG_TARGET_ROOTFS_INITRAMFS),)
-	$(call Image/BuilduImage,NAND,-initramfs)
-	$(CP) $(KDIR)/uImage-NAND-initramfs $(BIN_DIR)/$(IMG_PREFIX)-uImage-NAND-initramfs
-endif
-	$(call Image/Build/SysupgradeNAND,NAND,$(1),$(KDIR)/uImage-NAND)
-endef
+include $(SUBTARGET).mk
 
 define Image/Build
 	$(call Image/Build/$(1),$(1))
 endef
 
 $(eval $(call BuildImage))
+

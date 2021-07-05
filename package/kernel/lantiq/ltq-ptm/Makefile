@@ -8,10 +8,10 @@ include $(TOPDIR)/rules.mk
 include $(INCLUDE_DIR)/kernel.mk
 
 PKG_NAME:=ltq-ptm
-PKG_RELEASE:=1
-PKG_BUILD_DIR:=$(KERNEL_BUILD_DIR)/ltq-ptm-$(BUILD_VARIANT)
+PKG_RELEASE:=3
 
 PKG_MAINTAINER:=John Crispin <john@phrozen.org>
+PKG_LICENSE:=GPL-2.0+
 
 include $(INCLUDE_DIR)/package.mk
 
@@ -23,6 +23,14 @@ define KernelPackage/ltq-ptm-template
   URL:=http://www.lantiq.com/
   VARIANT:=$(1)
   DEPENDS:=@TARGET_lantiq_$(2)
+ifeq ($(1),vr9)
+  DEPENDS+= +kmod-ltq-vdsl-vr9-mei
+else
+  DEPENDS+= +kmod-ltq-adsl-$(1)-mei
+endif
+ifeq ($(1),ase)
+  DEPENDS+=@BROKEN
+endif
   FILES:=$(PKG_BUILD_DIR)/ltq_ptm_$(1).ko 
 endef
 
@@ -37,7 +45,7 @@ endef
 define Build/Compile
 	cd $(LINUX_DIR); \
 		ARCH=mips CROSS_COMPILE="$(KERNEL_CROSS)" \
-		$(MAKE) BUILD_VARIANT=$(BUILD_VARIANT) M=$(PKG_BUILD_DIR) V=1 modules
+		$(MAKE) $(KERNEL_MAKE_FLAGS) BUILD_VARIANT=$(BUILD_VARIANT) M=$(PKG_BUILD_DIR) V=1 modules
 endef
 
 $(eval $(call KernelPackage,ltq-ptm-danube))

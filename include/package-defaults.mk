@@ -1,11 +1,8 @@
+# SPDX-License-Identifier: GPL-2.0-only
 #
-# Copyright (C) 2006 OpenWrt.org
-#
-# This is free software, licensed under the GNU General Public License v2.
-# See /LICENSE for more information.
-#
+# Copyright (C) 2006-2020 OpenWrt.org
 
-PKG_DEFAULT_DEPENDS = +libc +SSP_SUPPORT:libssp +USE_GLIBC:librt +USE_GLIBC:libpthread
+PKG_DEFAULT_DEPENDS = +libc +USE_GLIBC:librt +USE_GLIBC:libpthread
 
 ifneq ($(PKG_NAME),toolchain)
   PKG_FIXUP_DEPENDS = $(if $(filter kmod-%,$(1)),$(2),$(PKG_DEFAULT_DEPENDS) $(filter-out $(PKG_DEFAULT_DEPENDS),$(2)))
@@ -56,13 +53,17 @@ define Package/Default
   VARIANT:=
   DEFAULT_VARIANT:=
   USERID:=
+  ALTERNATIVES:=
+  LICENSE:=$(PKG_LICENSE)
+  LICENSE_FILES:=$(PKG_LICENSE_FILES)
+  FILE_MODES:=$(PKG_FILE_MODES)
 endef
 
 Build/Patch:=$(Build/Patch/Default)
 ifneq ($(strip $(PKG_UNPACK)),)
   define Build/Prepare/Default
 	$(PKG_UNPACK)
-	[ ! -d ./src/ ] || $(CP) ./src/* $(PKG_BUILD_DIR)
+	[ ! -d ./src/ ] || $(CP) ./src/. $(PKG_BUILD_DIR)
 	$(Build/Patch)
   endef
 endif
@@ -92,7 +93,6 @@ CONFIGURE_ARGS = \
 		--mandir=$(CONFIGURE_PREFIX)/man \
 		--infodir=$(CONFIGURE_PREFIX)/info \
 		$(DISABLE_NLS) \
-		$(DISABLE_LARGEFILE) \
 		$(DISABLE_IPV6)
 
 CONFIGURE_VARS = \

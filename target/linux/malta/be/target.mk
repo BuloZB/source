@@ -1,7 +1,7 @@
 ARCH:=mips
+CPU_TYPE:=24kc
 SUBTARGET:=be
 BOARDNAME:=Big Endian
-FEATURES:=ramdisk mips16
 
 define Target/Description
 	Build BE firmware images for MIPS Malta CoreLV board running in

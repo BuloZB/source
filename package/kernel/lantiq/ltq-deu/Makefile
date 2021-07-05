@@ -8,9 +8,9 @@ include $(INCLUDE_DIR)/kernel.mk
 
 PKG_NAME:=ltq-deu
 PKG_RELEASE:=1
-PKG_BUILD_DIR:=$(KERNEL_BUILD_DIR)/ltq-deu-$(BUILD_VARIANT)
 
 PKG_MAINTAINER:=John Crispin <john@phrozen.org>
+PKG_LICENSE:=GPL-2.0+
 
 include $(INCLUDE_DIR)/package.mk
 
@@ -21,7 +21,7 @@ define KernelPackage/ltq-deu-template
   TITLE:=deu driver for $(1)
   URL:=http://www.lantiq.com/
   VARIANT:=$(1)
-  DEPENDS:=@TARGET_lantiq_$(2) +kmod-crypto-manager
+  DEPENDS:=@TARGET_lantiq_$(2) +kmod-crypto-manager @LINUX_5_4
   FILES:=$(PKG_BUILD_DIR)/ltq_deu_$(1).ko
   AUTOLOAD:=$(call AutoProbe,ltq_deu_$(1))
 endef

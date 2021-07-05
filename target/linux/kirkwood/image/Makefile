@@ -1,172 +1,212 @@
+# SPDX-License-Identifier: GPL-2.0-only
 #
 # Copyright (C) 2009-2013 OpenWrt.org
-#
-# This is free software, licensed under the GNU General Public License v2.
-# See /LICENSE for more information.
-#
-
-NAND_BLOCKSIZE := 2048-128k
 
 include $(TOPDIR)/rules.mk
 include $(INCLUDE_DIR)/image.mk
 
 KERNEL_LOADADDR:=0x8000
-TARGET_DEVICES = linksys-audi linksys-viper dockstar goflexnet goflexhome
 
-UBI_OPTS := -m 2048 -p 128KiB -s 512
-UBIFS_OPTS := -m 2048 -e 126KiB -c 4096
+define Device/dsa-migration
+  DEVICE_COMPAT_VERSION := 1.1
+  DEVICE_COMPAT_MESSAGE := Config cannot be migrated from swconfig to DSA
+endef
 
 define Device/Default
+  PROFILES := Default
+  DEVICE_DTS = kirkwood-$(lastword $(subst _, ,$(1)))
   KERNEL_DEPENDS = $$(wildcard $(DTS_DIR)/$$(DEVICE_DTS).dts)
   KERNEL := kernel-bin | append-dtb | uImage none
   KERNEL_NAME := zImage
   KERNEL_SUFFIX  := -uImage
-  KERNEL_INSTALL := 1
+  KERNEL_IN_UBI := 1
 
   PAGESIZE := 2048
   SUBPAGESIZE := 512
   BLOCKSIZE := 128k
-  IMAGES := sysupgrade.tar
-  UBINIZE_OPTS := -E 5
-  IMAGE/sysupgrade.tar := sysupgrade-tar
-endef
-
-define Device/dockstar
-  DEVICE_DTS := kirkwood-dockstar
-  FILESYSTEMS := squashfs
-  PROFILES := Generic DOCKSTAR
-  IMAGES += factory.bin
+  IMAGES := sysupgrade.bin factory.bin
+  IMAGE/sysupgrade.bin := sysupgrade-tar | append-metadata
   IMAGE/factory.bin := append-ubi
-  KERNEL_IN_UBI := 1
 endef
 
-define Device/goflexnet
-$(Device/dockstar)
-  PROFILES := Generic GOFLEXNET
-  DEVICE_DTS := kirkwood-goflexnet
+define Device/checkpoint_l-50
+  DEVICE_VENDOR := Check Point
+  DEVICE_MODEL := L-50
+  DEVICE_PACKAGES := kmod-ath9k kmod-gpio-button-hotplug kmod-mvsdio \
+	kmod-rtc-s35390a kmod-usb-ledtrig-usbport wpad-basic-wolfssl
+  IMAGES := sysupgrade.bin
 endef
+TARGET_DEVICES += checkpoint_l-50
 
-define Device/goflexhome
-$(Device/dockstar)
-  PROFILES := Generic GOFLEXHOME
-  DEVICE_DTS := kirkwood-goflexhome
+define Device/cisco_on100
+  DEVICE_VENDOR := Cisco Systems
+  DEVICE_MODEL := ON100
+  KERNEL_SIZE := 5376k
+  KERNEL_IN_UBI :=
+  UBINIZE_OPTS := -E 5
+  IMAGE/factory.bin := append-kernel | pad-to $$$$(KERNEL_SIZE) | append-ubi
+  DEVICE_PACKAGES := kmod-mvsdio
+  SUPPORTED_DEVICES += on100
 endef
+TARGET_DEVICES += cisco_on100
 
-define Device/linksys-audi
-  DEVICE_DTS := kirkwood-linksys-audi
-  KERNEL_SIZE := 2624k
-  FILESYSTEMS := squashfs
-  PROFILES := Generic AUDI
-  IMAGES += factory.bin
+define Device/cloudengines_pogoe02
+  DEVICE_VENDOR := Cloud Engines
+  DEVICE_MODEL := Pogoplug E02
+  DEVICE_DTS := kirkwood-pogo_e02
+  SUPPORTED_DEVICES += pogo_e02
+endef
+TARGET_DEVICES += cloudengines_pogoe02
+
+define Device/cloudengines_pogoplugv4
+  DEVICE_VENDOR := Cloud Engines
+  DEVICE_MODEL := Pogoplug V4
+  DEVICE_DTS := kirkwood-pogoplug-series-4
+  DEVICE_PACKAGES := kmod-ata-marvell-sata kmod-fs-ext4 kmod-mvsdio kmod-usb3 \
+	kmod-gpio-button-hotplug
+endef
+TARGET_DEVICES += cloudengines_pogoplugv4
+
+define Device/globalscale_sheevaplug
+  DEVICE_VENDOR := Globalscale
+  DEVICE_MODEL := Sheevaplug
+  DEVICE_PACKAGES := kmod-mvsdio
+endef
+TARGET_DEVICES += globalscale_sheevaplug
+
+define Device/iom_iconnect-1.1
+  DEVICE_VENDOR := Iomega
+  DEVICE_MODEL := Iconnect
+  DEVICE_DTS := kirkwood-iconnect
+  SUPPORTED_DEVICES += iconnect
+endef
+TARGET_DEVICES += iom_iconnect-1.1
+
+define Device/iom_ix2-200
+  DEVICE_VENDOR := Iomega
+  DEVICE_MODEL := StorCenter ix2-200
+  DEVICE_DTS := kirkwood-iomega_ix2_200
+  DEVICE_PACKAGES := kmod-ata-marvell-sata kmod-fs-ext4 \
+	kmod-gpio-button-hotplug kmod-hwmon-lm63
+  PAGESIZE := 512
+  SUBPAGESIZE := 256
+  BLOCKSIZE := 16k
+  KERNEL_SIZE := 3072k
+  KERNEL_IN_UBI :=
+  UBINIZE_OPTS := -E 5
+  IMAGE_SIZE := 31744k
+  IMAGE/factory.bin := append-kernel | pad-to $$$$(KERNEL_SIZE) | append-ubi | \
+	check-size
+endef
+TARGET_DEVICES += iom_ix2-200
+
+define Device/linksys
+  DEVICE_VENDOR := Linksys
+  DEVICE_PACKAGES := kmod-mwl8k wpad-basic-wolfssl kmod-gpio-button-hotplug
+  KERNEL_IN_UBI :=
+  UBINIZE_OPTS := -E 5
   IMAGE/factory.bin := append-kernel | pad-to $$$$(KERNEL_SIZE) | append-ubi
 endef
 
-define Device/linksys-viper
-  DEVICE_DTS := kirkwood-linksys-viper
+define Device/linksys_e4200-v2
+  $(Device/linksys)
+  $(Device/dsa-migration)
+  DEVICE_MODEL := E4200
+  DEVICE_VARIANT := v2
   KERNEL_SIZE := 2688k
-  FILESYSTEMS := squashfs
-  PROFILES := Generic VIPER
-  IMAGES += factory.bin
-  IMAGE/factory.bin := append-kernel | pad-to $$$$(KERNEL_SIZE) | append-ubi
+  SUPPORTED_DEVICES += linksys,viper linksys-viper
 endef
+TARGET_DEVICES += linksys_e4200-v2
 
-define Image/BuildKernel/Template
-
-	$(CP) $(KDIR)/zImage $(BIN_DIR)/$(IMG_PREFIX)-zImage
-	echo -ne '\x00\x00\x00\x00' >> $(BIN_DIR)/$(IMG_PREFIX)-zImage
-	$(call Image/BuildKernel/MkuImage, \
-		none, 0x8000, 0x8000, \
-		$(BIN_DIR)/$(IMG_PREFIX)-zImage, \
-		$(BIN_DIR)/$(IMG_PREFIX)-uImage \
-	)
-
- ifneq ($(CONFIG_TARGET_ROOTFS_INITRAMFS),)
-	$(CP) $(KDIR)/zImage-initramfs $(BIN_DIR)/$(IMG_PREFIX)-zImage-initramfs
-	echo -ne '\x00\x00\x00\x00' >> $(BIN_DIR)/$(IMG_PREFIX)-zImage-initramfs
-	$(call Image/BuildKernel/MkuImage, \
-		none, 0x8000, 0x8000, \
-		$(BIN_DIR)/$(IMG_PREFIX)-zImage-initramfs, \
-		$(BIN_DIR)/$(IMG_PREFIX)-uImage-initramfs \
-	)
- endif
-
- ifneq ($(1),)
-	$(CP) $(DTS_DIR)/kirkwood-$(1).dtb $(BIN_DIR)/$(IMG_PREFIX)-$(1).dtb
-
-	$(CP) $(KDIR)/zImage $(BIN_DIR)/$(IMG_PREFIX)-$(PROFILE_SANITIZED)-zImage
-	cat $(BIN_DIR)/$(IMG_PREFIX)-$(1).dtb >> $(BIN_DIR)/$(IMG_PREFIX)-$(PROFILE_SANITIZED)-zImage
-	$(call Image/BuildKernel/MkuImage, \
-		none, 0x8000, 0x8000, \
-		$(BIN_DIR)/$(IMG_PREFIX)-$(PROFILE_SANITIZED)-zImage, \
-		$(BIN_DIR)/$(IMG_PREFIX)-$(PROFILE_SANITIZED)-uImage \
-	)
-
-  ifneq ($(CONFIG_TARGET_ROOTFS_INITRAMFS),)
-	$(CP) $(KDIR)/zImage-initramfs $(BIN_DIR)/$(IMG_PREFIX)-$(PROFILE_SANITIZED)-zImage-initramfs
-	cat $(BIN_DIR)/$(IMG_PREFIX)-$(1).dtb >> $(BIN_DIR)/$(IMG_PREFIX)-$(PROFILE_SANITIZED)-zImage-initramfs
-	$(call Image/BuildKernel/MkuImage, \
-		none, 0x8000, 0x8000, \
-		$(BIN_DIR)/$(IMG_PREFIX)-$(PROFILE_SANITIZED)-zImage-initramfs, \
-		$(BIN_DIR)/$(IMG_PREFIX)-$(PROFILE_SANITIZED)-uImage-initramfs \
-	)
-  endif
- endif
+define Device/linksys_ea3500
+  $(Device/linksys)
+  $(Device/dsa-migration)
+  DEVICE_MODEL := EA3500
+  PAGESIZE := 512
+  SUBPAGESIZE := 256
+  BLOCKSIZE := 16k
+  KERNEL_SIZE := 2624k
+  SUPPORTED_DEVICES += linksys,audi linksys-audi
 endef
+TARGET_DEVICES += linksys_ea3500
 
-define Image/Build/jffs2-nand-2048-128k
-	dd if=$(KDIR)/root.$(1) of=$(BIN_DIR)/$(IMG_PREFIX)-$(PROFILE_SANITIZED)-$(1).img \
-		bs=2048 conv=sync
+define Device/linksys_ea4500
+  $(Device/linksys)
+  $(Device/dsa-migration)
+  DEVICE_MODEL := EA4500
+  KERNEL_SIZE := 2688k
+  SUPPORTED_DEVICES += linksys,viper linksys-viper
 endef
+TARGET_DEVICES += linksys_ea4500
 
-define Image/Build/squashfs
-	$(call prepare_generic_squashfs,$(KDIR)/root.squashfs)
-	( \
-		dd if=$(KDIR)/zImage bs=4096k conv=sync; \
-		dd if=$(KDIR)/root.$(1) bs=128k conv=sync; \
-	) > $(BIN_DIR)/$(IMG_PREFIX)-$(PROFILE_SANITIZED)-$(1).img
+define Device/raidsonic_ib-nas62x0
+  DEVICE_VENDOR := RaidSonic
+  DEVICE_MODEL := ICY BOX IB-NAS62x0
+  DEVICE_DTS := kirkwood-ib62x0
+  DEVICE_PACKAGES := kmod-ata-marvell-sata kmod-fs-ext4
+  SUPPORTED_DEVICES += ib62x0
 endef
+TARGET_DEVICES += raidsonic_ib-nas62x0
 
-define Image/Build/ubifs
-
- ifneq ($($(PROFILE)_UBIFS_OPTS),)
-	$(CP) $(KDIR)/root.ubifs $(BIN_DIR)/$(IMG_PREFIX)-$(PROFILE_SANITIZED)-rootfs.ubifs
- endif
+define Device/seagate_blackarmor-nas220
+  DEVICE_VENDOR := Seagate
+  DEVICE_MODEL := Blackarmor NAS220
+  DEVICE_PACKAGES := kmod-hwmon-adt7475 kmod-fs-ext4 kmod-ata-marvell-sata \
+	mdadm kmod-gpio-button-hotplug
+  PAGESIZE := 512
+  SUBPAGESIZE := 256
+  BLOCKSIZE := 16k
+  UBINIZE_OPTS := -e 1
 endef
+TARGET_DEVICES += seagate_blackarmor-nas220
 
-define Image/Build/ubi
-
- ifneq ($($(PROFILE)_UBI_OPTS),)
-	$(CP) $(KDIR)/root.ubi $(BIN_DIR)/$(IMG_PREFIX)-$(PROFILE_SANITIZED)-rootfs.ubi
- endif
+define Device/seagate_dockstar
+  DEVICE_VENDOR := Seagate
+  DEVICE_MODEL := FreeAgent Dockstar
+  SUPPORTED_DEVICES += dockstar
 endef
+TARGET_DEVICES += seagate_dockstar
 
-IOMEGA_IX2_200_UBIFS_OPTS := -m 512 -e 15872 -c 2048
-IOMEGA_IX2_200_UBI_OPTS := -m 512 -p 16384 -s 256
-
-Image/BuildKernel/Template/Generic=$(call Image/BuildKernel/Template)
-Image/BuildKernel/Template/IB62X0=$(call Image/BuildKernel/Template,ib62x0)
-Image/BuildKernel/Template/ICONNECT=$(call Image/BuildKernel/Template,iconnect)
-Image/BuildKernel/Template/IOMEGA_IX2_200=$(call Image/BuildKernel/Template,iomega_ix2_200)
-Image/BuildKernel/Template/NSA310S=$(call Image/BuildKernel/Template,nsa310s)
-Image/BuildKernel/Template/POGOE02=$(call Image/BuildKernel/Template,pogo_e02)
-Image/BuildKernel/Template/SHEEVAPLUG=$(call Image/BuildKernel/Template,sheevaplug)
-Image/BuildKernel/Template/SHEEVAPLUGSATA=$(call Image/BuildKernel/Template,sheevaplug-esata)
-Image/BuildKernel/Template/GuruplugServerPlus=$(call Image/BuildKernel/Template,guruplug-server-plus)
-Image/BuildKernel/Template/Topkick1281P2=$(call Image/BuildKernel/Template,topkick)
-
-define Image/BuildKernel
-	$(call Image/BuildKernel/Template/$(PROFILE))
+define Device/seagate_goflexnet
+  DEVICE_VENDOR := Seagate
+  DEVICE_MODEL := GoFlexNet
+  DEVICE_PACKAGES := kmod-ata-marvell-sata kmod-fs-ext4
+  SUPPORTED_DEVICES += goflexnet
 endef
+TARGET_DEVICES += seagate_goflexnet
 
-define Image/InstallKernel
-	$(call Image/InstallKernel/Template/$(PROFILE))
+define Device/seagate_goflexhome
+  DEVICE_VENDOR := Seagate
+  DEVICE_MODEL := GoFlexHome
+  DEVICE_PACKAGES := kmod-ata-marvell-sata kmod-fs-ext4
+  SUPPORTED_DEVICES += goflexhome
 endef
+TARGET_DEVICES += seagate_goflexhome
 
-define Image/Build
-	$(if $(Image/Build/$(1)), \
-		$(call Image/Build/$(1),$(1)), \
-		$(CP) $(KDIR)/root.$(1) $(BIN_DIR)/$(IMG_PREFIX)-$(PROFILE_SANITIZED)-$(1).img \
-	)
+define Device/zyxel_nsa310b
+  DEVICE_VENDOR := ZyXEL
+  DEVICE_MODEL := NSA310b
+  DEVICE_PACKAGES := kmod-ata-marvell-sata kmod-r8169 kmod-fs-ext4 \
+	kmod-gpio-button-hotplug kmod-hwmon-lm85
+  SUPPORTED_DEVICES += nsa310b
 endef
+TARGET_DEVICES += zyxel_nsa310b
+
+define Device/zyxel_nsa310s
+  DEVICE_VENDOR := ZyXEL
+  DEVICE_MODEL := NSA310S
+  DEVICE_PACKAGES := kmod-ata-marvell-sata kmod-fs-ext4 kmod-gpio-button-hotplug
+endef
+TARGET_DEVICES += zyxel_nsa310s
+
+define Device/zyxel_nsa325
+  DEVICE_VENDOR := ZyXEL
+  DEVICE_MODEL := NSA325
+  DEVICE_VARIANT := v1/v2
+  DEVICE_PACKAGES := kmod-ata-marvell-sata kmod-fs-ext4 \
+	kmod-gpio-button-hotplug kmod-rtc-pcf8563 kmod-usb3
+  SUPPORTED_DEVICES += nsa325
+endef
+TARGET_DEVICES += zyxel_nsa325
 
 $(eval $(call BuildImage))

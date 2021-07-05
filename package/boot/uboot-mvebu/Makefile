@@ -8,90 +8,67 @@
 include $(TOPDIR)/rules.mk
 include $(INCLUDE_DIR)/kernel.mk
 
-PKG_NAME:=u-boot
-PKG_VERSION:=2016.03
+PKG_VERSION:=2021.01
 PKG_RELEASE:=1
 
-PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)-$(BUILD_VARIANT)/$(PKG_NAME)-$(PKG_VERSION)
-PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.bz2
-PKG_SOURCE_URL:=\
-	http://mirror2.openwrt.org/sources \
-	ftp://ftp.denx.de/pub/u-boot
-PKG_HASH:=e49337262ecac44dbdeac140f2c6ebd1eba345e0162b0464172e7f05583ed7bb
+PKG_HASH:=b407e1510a74e863b8b5cb42a24625344f0e0c2fc7582d8c866bd899367d0454
 
-PKG_LICENSE:=GPL-2.0 GPL-2.0+
-PKG_LICENSE_FILES:=Licenses/README
-
-PKG_BUILD_PARALLEL:=1
-
+include $(INCLUDE_DIR)/u-boot.mk
 include $(INCLUDE_DIR)/package.mk
+include $(INCLUDE_DIR)/host-build.mk
 
-define uboot/Default
-  TITLE:=
-endef
-
-define uboot/clearfog
-  TITLE:=U-Boot for SolidRun ClearFog A1
-  DEVICE:=armada-388-clearfog
-endef
-
-UBOOTS:= \
-	clearfog
-
-define Package/uboot/template
-define Package/uboot-mvebu-$(1)
-  SECTION:=boot
-  CATEGORY:=Boot Loaders
-  DEPENDS:=@(TARGET_DEVICE_mvebu_DEVICE_$(3)||TARGET_mvebu_DEVICE_$(3))
-  DEFAULT:=m
+define U-Boot/Default
+  BUILD_TARGET:=mvebu
   HIDDEN:=1
-  TITLE:=$(2)
-  URL:=http://www.denx.de/wiki/U-Boot
-  VARIANT:=$(1)
-  MAINTAINER:=Felix Fietkau <nbd@nbd.name>
-endef
 endef
 
-define BuildUBootPackage
-	$(eval $(uboot/Default))
-	$(eval $(uboot/$(1)))
-	$(call Package/uboot/template,$(1),$(TITLE),$(DEVICE))
+define U-Boot/clearfog
+  NAME:=SolidRun ClearFog A1
+  BUILD_DEVICES:=solidrun_clearfog-base-a1 solidrun_clearfog-pro-a1
+  BUILD_SUBTARGET:=cortexa9
+  UBOOT_IMAGE:=u-boot-spl.kwb
 endef
+
+define U-Boot/helios4
+  NAME:=Kobol Helios 4
+  BUILD_DEVICES:=kobol_helios4
+  BUILD_SUBTARGET:=cortexa9
+  UBOOT_IMAGE:=u-boot-spl.kwb
+endef
+
+define U-Boot/espressobin
+  NAME:=Marvell ESPRESSObin
+  BUILD_SUBTARGET:=cortexa53
+  UBOOT_CONFIG:=mvebu_espressobin-88f3720
+endef
+
+define U-Boot/uDPU
+  NAME:=Methode uDPU
+  BUILD_SUBTARGET:=cortexa53
+endef
+
+UBOOT_TARGETS:= \
+	clearfog \
+	helios4 \
+	espressobin \
+	uDPU
+
+Build/Exports:=$(Host/Exports)
 
 define Build/Configure
-	+$(MAKE) $(PKG_JOBS) -C $(PKG_BUILD_DIR) \
-		$(BUILD_VARIANT)_config
+	# enable additional options beyond <device>_defconfig
+	echo CONFIG_CMD_SETEXPR=y >> $(PKG_BUILD_DIR)/configs/$(UBOOT_CONFIG)_defconfig
+
+	$(call Build/Configure/U-Boot)
 endef
 
-define Build/Compile
-	+$(MAKE) $(PKG_JOBS) -C $(PKG_BUILD_DIR) \
-		CROSS_COMPILE=$(TARGET_CROSS) \
-		DTC_DIR=$(LINUX_DIR)/scripts/dtc/
+define Package/u-boot/install
+	$(if $(findstring cortexa53,$(BUILD_SUBTARGET)),,$(Package/u-boot/install/default))
 endef
 
-define Package/uboot/install/default
-	$(INSTALL_DIR) $(BIN_DIR)/uboot-$(BOARD)-$(1)
-	$(CP) $(PKG_BUILD_DIR)/u-boot-spl.kwb \
-		$(BIN_DIR)/uboot-$(BOARD)-$(1)/openwrt-$(BOARD)-$(1)-u-boot-spl.kwb
-	$(INSTALL_DIR) $(KERNEL_BUILD_DIR)/
-	$(CP) $(PKG_BUILD_DIR)/u-boot-spl.kwb \
-		$(KERNEL_BUILD_DIR)/openwrt-$(BOARD)-$(1)-u-boot-spl.kwb
-	$(INSTALL_DIR) $(BIN_DIR)/u-boot-kwboot/
-	$(CP) $(PKG_BUILD_DIR)/tools/kwboot \
-		$(BIN_DIR)/u-boot-kwboot/
+define Build/InstallDev
+	$(INSTALL_DIR) $(STAGING_DIR_IMAGE)
+	$(CP) $(PKG_BUILD_DIR)/$(UBOOT_IMAGE) $(STAGING_DIR_IMAGE)/$(BUILD_VARIANT)-$(UBOOT_IMAGE)
 endef
 
-define Package/uboot/install/template
-define Package/uboot-mvebu-$(1)/install
-	$(call Package/uboot/install/default,$(2))
-endef
-endef
-
-$(foreach u,$(UBOOTS), \
-	$(eval $(call Package/uboot/install/template,$(u),$(u))) \
-)
-
-$(foreach u,$(UBOOTS), \
-	$(eval $(call BuildUBootPackage,$(u))) \
-	$(eval $(call BuildPackage,uboot-mvebu-$(u))) \
-)
+$(eval $(call BuildPackage/U-Boot))

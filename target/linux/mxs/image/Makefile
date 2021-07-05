@@ -1,9 +1,6 @@
+# SPDX-License-Identifier: GPL-2.0-only
 #
 # Copyright (C) 2013-2015 OpenWrt.org
-#
-# This is free software, licensed under the GNU General Public License v2.
-# See /LICENSE for more information.
-#
 
 include $(TOPDIR)/rules.mk
 include $(INCLUDE_DIR)/image.mk
@@ -40,19 +37,21 @@ define Image/Build/SDCard-vfat-ext4
 
 	./gen_sdcard_vfat_ext4.sh \
 		$(BIN_DIR)/$(2) \
-		$(BIN_DIR)/uboot-mxs-$(4)/uboot-mxs-$(4).sb \
+		$(STAGING_DIR_IMAGE)/$(4)-u-boot.sb \
 		$(KDIR)/boot.img \
 		$(KDIR)/root.$(1) \
 		$(CONFIG_TARGET_BOOTFS_PARTSIZE) \
 		$(CONFIG_TARGET_ROOTFS_PARTSIZE)
+	$(call Image/Gzip,$(BIN_DIR)/$(2))
 endef
 
 define Image/Build/SDCard-ext4-ext4
 	./gen_sdcard_ext4_ext4.sh \
 		$(BIN_DIR)/$(2) \
-		$(BIN_DIR)/uboot-mxs-$(4)/uboot-mxs-$(4).sb \
+		$(STAGING_DIR_IMAGE)/$(4)-u-boot.sb \
 		$(KDIR)/root.$(1) \
 		$(CONFIG_TARGET_ROOTFS_PARTSIZE)
+	$(call Image/Gzip,$(BIN_DIR)/$(2))
 endef
 
 define Image/Build/Profile/olinuxino-maxi
@@ -71,6 +70,7 @@ define Image/Build
 	$(call Image/Build/$(1),$(1))
 	$(call Image/Build/Profile/$(PROFILE),$(1),$(IMG_PREFIX)-$(PROFILE)-sdcard.img)
 	dd if=$(KDIR)/root.$(1) of=$(BIN_DIR)/$(IMG_PREFIX)-root.$(1) bs=128k conv=sync
+	$(call Image/Gzip,$(BIN_DIR)/$(IMG_PREFIX)-root.$(1))
 endef
 
 $(eval $(call BuildImage))

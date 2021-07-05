@@ -8,24 +8,26 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=gdb
-PKG_VERSION:=7.11.1
+PKG_VERSION:=10.1
 PKG_RELEASE:=1
 
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.xz
 PKG_SOURCE_URL:=@GNU/gdb
-PKG_HASH:=e9216da4e3755e9f414c1aa0026b626251dfc57ffe572a266e98da4f6988fc70
+PKG_HASH:=f82f1eceeec14a3afa2de8d9b0d3c91d5a3820e23e0a01bbb70ef9f0276b62c0
 
 PKG_BUILD_PARALLEL:=1
 PKG_INSTALL:=1
 PKG_LICENSE:=GPL-3.0+
+PKG_CPE_ID:=cpe:/a:gnu:gdb
 
 include $(INCLUDE_DIR)/package.mk
+include $(INCLUDE_DIR)/nls.mk
 
 define Package/gdb/Default
   SECTION:=devel
   CATEGORY:=Development
-  DEPENDS:=+!USE_MUSL:libthread-db +PACKAGE_zlib:zlib @!arc
-  URL:=http://www.gnu.org/software/gdb/
+  DEPENDS:=+!USE_MUSL:libthread-db $(ICONV_DEPENDS) $(INTL_DEPENDS)
+  URL:=https://www.gnu.org/software/gdb/
 endef
 
 define Package/gdb
@@ -43,6 +45,7 @@ endef
 define Package/gdbserver
 $(call Package/gdb/Default)
   TITLE:=Remote server for GNU Debugger
+  DEPENDS+=@!arc
 endef
 
 define Package/gdbserver/description
@@ -53,25 +56,28 @@ endef
 # XXX: add --disable-werror to prevent build failure with arm
 CONFIGURE_ARGS+= \
 	--with-system-readline \
+	--with-system-zlib \
 	--without-expat \
 	--without-lzma \
-	--disable-werror
+	--disable-unit-tests \
+	--disable-ubsan \
+	--disable-sim \
+	--disable-werror \
+	--disable-source-highlight
 
 CONFIGURE_VARS+= \
 	ac_cv_search_tgetent="$(TARGET_LDFLAGS) -lncurses -lreadline"
 
-define Build/Compile
-	+$(MAKE) $(PKG_JOBS) -C $(PKG_BUILD_DIR) \
-		DESTDIR="$(PKG_INSTALL_DIR)" \
-		CPPFLAGS="$(TARGET_CPPFLAGS)" \
-		all
-endef
+TARGET_LDFLAGS+= \
+	$(INTL_LDFLAGS) $(if $(INTL_FULL),-lintl) \
+	-static-libstdc++ \
+	-Wl,--gc-sections
 
 define Build/Install
 	$(MAKE) -C $(PKG_BUILD_DIR) \
 		DESTDIR="$(PKG_INSTALL_DIR)" \
 		CPPFLAGS="$(TARGET_CPPFLAGS)" \
-		install-gdb
+		install-gdb install-gdbserver
 endef
 
 define Package/gdb/install

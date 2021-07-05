@@ -74,7 +74,7 @@ ppp_generic_init_config() {
 	proto_config_add_string pppd_options
 	proto_config_add_string 'connect:file'
 	proto_config_add_string 'disconnect:file'
-	proto_config_add_string ipv6
+	[ -e /proc/sys/net/ipv6 ] && proto_config_add_string ipv6
 	proto_config_add_boolean authfail
 	proto_config_add_int mtu
 	proto_config_add_string pppname
@@ -88,7 +88,10 @@ ppp_generic_setup() {
 	local config="$1"; shift
 	local localip
 
-	json_get_vars ipv6 demand keepalive keepalive_adaptive username password pppd_options pppname unnumbered persist maxfail holdoff
+	json_get_vars ip6table demand keepalive keepalive_adaptive username password pppd_options pppname unnumbered persist maxfail holdoff peerdns
+
+	[ ! -e /proc/sys/net/ipv6 ] && ipv6=0 || json_get_var ipv6 ipv6
+
 	if [ "$ipv6" = 0 ]; then
 		ipv6=""
 	elif [ -z "$ipv6" -o "$ipv6" = auto ]; then
@@ -120,6 +123,8 @@ ppp_generic_setup() {
 		}
 	}
 
+	[ -n "$keepalive" ] || keepalive="5 1"
+
 	local lcp_failure="${keepalive%%[, ]*}"
 	local lcp_interval="${keepalive##*[, ]}"
 	local lcp_adaptive="lcp-echo-adaptive"
@@ -136,6 +141,8 @@ ppp_generic_setup() {
 		${lcp_failure:+lcp-echo-interval $lcp_interval lcp-echo-failure $lcp_failure $lcp_adaptive} \
 		${ipv6:++ipv6} \
 		${autoipv6:+set AUTOIPV6=1} \
+		${ip6table:+set IP6TABLE=$ip6table} \
+		${peerdns:+set PEERDNS=$peerdns} \
 		nodefaultroute \
 		usepeerdns \
 		$demand $persist maxfail $maxfail \
@@ -144,9 +151,9 @@ ppp_generic_setup() {
 		${connect:+connect "$connect"} \
 		${disconnect:+disconnect "$disconnect"} \
 		ip-up-script /lib/netifd/ppp-up \
-		ipv6-up-script /lib/netifd/ppp6-up \
+		${ipv6:+ipv6-up-script /lib/netifd/ppp6-up} \
 		ip-down-script /lib/netifd/ppp-down \
-		ipv6-down-script /lib/netifd/ppp-down \
+		${ipv6:+ipv6-down-script /lib/netifd/ppp-down} \
 		${mtu:+mtu $mtu mru $mtu} \
 		"$@" $pppd_options
 }
@@ -203,6 +210,9 @@ proto_pppoe_init_config() {
 	proto_config_add_string "ac"
 	proto_config_add_string "service"
 	proto_config_add_string "host_uniq"
+	proto_config_add_int "padi_attempts"
+	proto_config_add_int "padi_timeout"
+
 	lasterror=1
 }
 
@@ -220,12 +230,16 @@ proto_pppoe_setup() {
 	json_get_var ac ac
 	json_get_var service service
 	json_get_var host_uniq host_uniq
+	json_get_var padi_attempts padi_attempts
+	json_get_var padi_timeout padi_timeout
 
 	ppp_generic_setup "$config" \
-		plugin rp-pppoe.so \
+		plugin pppoe.so \
 		${ac:+rp_pppoe_ac "$ac"} \
 		${service:+rp_pppoe_service "$service"} \
 		${host_uniq:+host-uniq "$host_uniq"} \
+		${padi_attempts:+pppoe-padi-attempts $padi_attempts} \
+		${padi_timeout:+pppoe-padi-timeout $padi_timeout} \
 		"nic-$iface"
 }
 
@@ -317,7 +331,7 @@ proto_pptp_teardown() {
 
 [ -n "$INCLUDE_ONLY" ] || {
 	add_protocol ppp
-	[ -f /usr/lib/pppd/*/rp-pppoe.so ] && add_protocol pppoe
+	[ -f /usr/lib/pppd/*/pppoe.so ] && add_protocol pppoe
 	[ -f /usr/lib/pppd/*/pppoatm.so ] && add_protocol pppoa
 	[ -f /usr/lib/pppd/*/pptp.so ] && add_protocol pptp
 }

@@ -1,9 +1,7 @@
-# 
+# SPDX-License-Identifier: GPL-2.0-only
+#
 # Copyright (C) 2006-2010 OpenWrt.org
-#
-# This is free software, licensed under the GNU General Public License v2.
-# See /LICENSE for more information.
-#
+
 include $(TOPDIR)/rules.mk
 include $(INCLUDE_DIR)/image.mk
 
@@ -22,3 +20,14 @@ define Image/Build
 endef
 
 $(eval $(call BuildImage))
+
+# UML requires linking against several glibc static libraries: libutil, librt
+# and libpthread, check that here. We do not check against libpthread
+# specifically because getting something to build that references a libpthread
+# symbol is pretty involved and Linux distributions package these 3 libraries
+# in the same package.
+
+$(eval $(call TestHostCommand,glibc-static, \
+	Please install a static glibc package. (Missing libutil.a, librt.a or libpthread.a), \
+	echo 'int main(int argc, char **argv) { login(0); timer_gettime(0, 0); return 0; }' | \
+		gcc -include utmp.h -x c -o $(TMP_DIR)/a.out - -static -lutil -lrt))

@@ -1,62 +1,65 @@
-. /lib/ipq806x.sh
-
 PART_NAME=firmware
 REQUIRE_IMAGE_METADATA=1
+
+RAMFS_COPY_BIN='fw_printenv fw_setenv'
+RAMFS_COPY_DATA='/etc/fw_env.config /var/lock/fw_printenv.lock'
 
 platform_check_image() {
 	return 0;
 }
 
-platform_pre_upgrade() {
-	local board=$(ipq806x_board_name)
-
-	case "$board" in
-	ap148 |\
-	d7800 |\
-	nbg6817 |\
-	r7500 |\
-	r7500v2 |\
-	r7800)
+platform_do_upgrade() {
+	case "$(board_name)" in
+	askey,rt4230w-rev6 |\
+	compex,wpq864|\
+	netgear,d7800 |\
+	netgear,r7500 |\
+	netgear,r7500v2 |\
+	netgear,r7800 |\
+	qcom,ipq8064-ap148 |\
+	qcom,ipq8064-ap161)
 		nand_do_upgrade "$1"
 		;;
-	ea8500)
-		linksys_preupgrade "$1"
+	asrock,g10)
+		asrock_upgrade_prepare
+		nand_do_upgrade "$1"
 		;;
-	esac
-}
-
-platform_do_upgrade() {
-	local board=$(ipq806x_board_name)
-
-	case "$board" in
-	c2600)
+	buffalo,wxr-2533dhp)
+		buffalo_upgrade_prepare_ubi
+		CI_ROOTPART="ubi_rootfs"
+		nand_do_upgrade "$1"
+		;;
+	edgecore,ecw5410)
+		part="$(awk -F 'ubi.mtd=' '{printf $2}' /proc/cmdline | sed -e 's/ .*$//')"
+		if [ "$part" = "rootfs1" ]; then
+			fw_setenv active 2 || exit 1
+			CI_UBIPART="rootfs2"
+		else
+			fw_setenv active 1 || exit 1
+			CI_UBIPART="rootfs1"
+		fi
+		nand_do_upgrade "$1"
+		;;
+	linksys,ea7500-v1 |\
+	linksys,ea8500)
+		platform_do_upgrade_linksys "$1"
+		;;
+	tplink,ad7200 |\
+	tplink,c2600)
 		PART_NAME="os-image:rootfs"
 		MTD_CONFIG_ARGS="-s 0x200000"
-		default_do_upgrade "$ARGV"
+		default_do_upgrade "$1"
 		;;
-	ea8500)
-		platform_do_upgrade_linksys "$ARGV"
-		;;
-	vr2600v)
+	tplink,vr2600v)
 		PART_NAME="kernel:rootfs"
 		MTD_CONFIG_ARGS="-s 0x200000"
-		default_do_upgrade "$ARGV"
+		default_do_upgrade "$1"
 		;;
-	esac
-}
-
-platform_nand_pre_upgrade() {
-	local board=$(ipq806x_board_name)
-
-	case "$board" in
-	nbg6817)
+	zyxel,nbg6817)
 		zyxel_do_upgrade "$1"
 		;;
+	*)
+		default_do_upgrade "$1"
+		;;
 	esac
 }
-
-blink_led() {
-	. /etc/diag.sh; set_state upgrade
-}
-
-append sysupgrade_pre_upgrade blink_led

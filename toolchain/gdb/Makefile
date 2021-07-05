@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2006-2016 OpenWrt.org
+# Copyright (C) 2006-2020 OpenWrt.org
 #
 # This is free software, licensed under the GNU General Public License v2.
 # See /LICENSE for more information.
@@ -7,23 +7,13 @@
 include $(TOPDIR)/rules.mk
 
 PKG_NAME:=gdb
-
-ifeq ($(CONFIG_arc),y)
-PKG_VERSION:=arc-2016.03-gdb
-
-PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.gz
-PKG_SOURCE_URL:=https://github.com/foss-for-synopsys-dwc-arc-processors/binutils-gdb/archive/arc-2016.03-gdb
-PKG_HASH:=6a91f86cc487c1548d3f5d4f29f7226d2019c0db8a63633aeabd5914a340f3f9
-GDB_DIR:=binutils-$(PKG_NAME)-$(PKG_VERSION)
-PATCH_DIR:=./patches-arc
-else
-PKG_VERSION:=7.12
+PKG_VERSION:=10.1
+PKG_RELEASE:=1
 
 PKG_SOURCE:=$(PKG_NAME)-$(PKG_VERSION).tar.xz
 PKG_SOURCE_URL:=@GNU/gdb
-PKG_HASH:=834ff3c5948b30718343ea57b11cbc3235d7995c6a4f3a5cecec8c8114164f94
+PKG_HASH:=f82f1eceeec14a3afa2de8d9b0d3c91d5a3820e23e0a01bbb70ef9f0276b62c0
 GDB_DIR:=$(PKG_NAME)-$(PKG_VERSION)
-endif
 
 HOST_BUILD_DIR:=$(BUILD_DIR_TOOLCHAIN)/$(GDB_DIR)
 
@@ -32,6 +22,7 @@ HOST_BUILD_PARALLEL:=1
 include $(INCLUDE_DIR)/toolchain-build.mk
 
 HOST_CONFIGURE_VARS += \
+	acx_cv_cc_gcc_supports_ada=false \
 	gdb_cv_func_sigsetjmp=yes
 
 HOST_CONFIGURE_ARGS = \
@@ -41,21 +32,32 @@ HOST_CONFIGURE_ARGS = \
 	--target=$(REAL_GNU_TARGET_NAME) \
 	--disable-werror \
 	--without-uiout \
-	--disable-tui --disable-gdbtk --without-x \
+	--enable-tui --disable-gdbtk --without-x \
 	--without-included-gettext \
 	--enable-threads \
 	--with-expat \
-	--without-python \
+	--disable-unit-tests \
+	--disable-ubsan \
 	--disable-binutils \
 	--disable-ld \
 	--disable-gas \
 	--disable-sim
+
+ifneq ($(CONFIG_GDB_PYTHON),)
+  HOST_CONFIGURE_ARGS+= --with-python
+else
+  HOST_CONFIGURE_ARGS+= --without-python
+endif
 
 define Host/Install
 	mkdir -p $(TOOLCHAIN_DIR)/bin
 	$(INSTALL_BIN) $(HOST_BUILD_DIR)/gdb/gdb $(TOOLCHAIN_DIR)/bin/$(TARGET_CROSS)gdb
 	ln -fs $(TARGET_CROSS)gdb $(TOOLCHAIN_DIR)/bin/$(GNU_TARGET_NAME)-gdb
 	strip $(TOOLCHAIN_DIR)/bin/$(TARGET_CROSS)gdb
+	mkdir -p $(TOOLCHAIN_DIR)/share/gdb
+	-cp -R $(HOST_BUILD_DIR)/gdb/data-directory/python $(TOOLCHAIN_DIR)/share/gdb/
+	cp -R $(HOST_BUILD_DIR)/gdb/data-directory/syscalls $(TOOLCHAIN_DIR)/share/gdb/
+	cp -R $(HOST_BUILD_DIR)/gdb/data-directory/system-gdbinit $(TOOLCHAIN_DIR)/share/gdb/
 endef
 
 define Host/Clean

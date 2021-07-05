@@ -4,10 +4,10 @@ PKG_NAME:=uclient
 PKG_RELEASE=1
 
 PKG_SOURCE_PROTO:=git
-PKG_SOURCE_URL=$(LEDE_GIT)/project/uclient.git
-PKG_SOURCE_DATE:=2016-07-30
-PKG_SOURCE_VERSION:=ccb314db2e99463de15eed9d7626360d82aec4d2
-PKG_MIRROR_HASH:=76102eabb687fa34369b2216f6b379ff56fcc835e3e89cbd21dcc150ffbc9071
+PKG_SOURCE_URL=$(PROJECT_GIT)/project/uclient.git
+PKG_MIRROR_HASH:=7c443cac02a734dd312c65618f4de17248d188317f30a9fac192c1503b3d5c05
+PKG_SOURCE_DATE:=2021-05-14
+PKG_SOURCE_VERSION:=6a6011df3429ffa5958d12b1327eeda4fd9daa47
 CMAKE_INSTALL:=1
 
 PKG_BUILD_DEPENDS:=ustream-ssl
@@ -24,7 +24,7 @@ define Package/libuclient
   SECTION:=libs
   CATEGORY:=Libraries
   TITLE:=HTTP/1.1 client library
-  ABI_VERSION:=$(PKG_VERSION)
+  ABI_VERSION:=20201210
   DEPENDS:=+libubox
 endef
 
@@ -32,6 +32,8 @@ define Package/uclient-fetch
   SECTION:=net
   CATEGORY:=Network
   TITLE:=Tiny wget replacement using libuclient
+  ALTERNATIVES:=200:/usr/bin/wget:/bin/uclient-fetch
+  PROVIDES:=wget
   DEPENDS:=+libuclient
 endef
 
@@ -43,7 +45,6 @@ endef
 define Package/uclient-fetch/install
 	$(INSTALL_DIR) $(1)/bin
 	$(INSTALL_BIN) $(PKG_INSTALL_DIR)/usr/bin/uclient-fetch $(1)/bin/
-	ln -s uclient-fetch $(1)/bin/wget
 endef
 
 $(eval $(call BuildPackage,libuclient))

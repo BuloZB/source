@@ -1,9 +1,8 @@
 include $(TOPDIR)/include/verbose.mk
+include $(TOPDIR)/rules.mk
 TMP_DIR:=$(TOPDIR)/tmp
 
 all: $(TMP_DIR)/.$(SCAN_TARGET)
-
-include $(TOPDIR)/include/host.mk
 
 SCAN_TARGET ?= packageinfo
 SCAN_NAME ?= package
@@ -12,19 +11,36 @@ TARGET_STAMP:=$(TMP_DIR)/info/.files-$(SCAN_TARGET).stamp
 FILELIST:=$(TMP_DIR)/info/.files-$(SCAN_TARGET)-$(SCAN_COOKIE)
 OVERRIDELIST:=$(TMP_DIR)/info/.overrides-$(SCAN_TARGET)-$(SCAN_COOKIE)
 
+export PATH:=$(TOPDIR)/staging_dir/host/bin:$(PATH)
+
+define feedname
+$(if $(patsubst feeds/%,,$(1)),,$(word 2,$(subst /, ,$(1))))
+endef
+
+ifeq ($(SCAN_NAME),target)
+  SCAN_DEPS=image/Makefile profiles/*.mk $(TOPDIR)/include/kernel*.mk $(TOPDIR)/include/target.mk image/*.mk
+else
+  SCAN_DEPS=$(TOPDIR)/include/package*.mk
+ifneq ($(call feedname,$(SCAN_DIR)),)
+  SCAN_DEPS += $(TOPDIR)/feeds/$(call feedname,$(SCAN_DIR))/*.mk
+endif
+endif
+
 ifeq ($(IS_TTY),1)
-  define progress
+  ifneq ($(strip $(NO_COLOR)),1)
+    define progress
 	printf "\033[M\r$(1)" >&2;
-  endef
+    endef
+  else
+    define progress
+	printf "\r$(1)" >&2;
+    endef
+  endif
 else
   define progress
 	:;
   endef
 endif
-
-define feedname
-$(if $(patsubst feeds/%,,$(1)),,$(word 2,$(subst /, ,$(1))))
-endef
 
 define PackageDir
   $(TMP_DIR)/.$(SCAN_TARGET): $(TMP_DIR)/info/.$(SCAN_TARGET)-$(1)
@@ -51,12 +67,12 @@ $(OVERRIDELIST):
 ifeq ($(SCAN_NAME),target)
   GREP_STRING=BuildTarget
 else
-  GREP_STRING=(Build/DefaultTargets|BuildPackage|.+Package)
+  GREP_STRING=(Build/DefaultTargets|BuildPackage|KernelPackage)
 endif
 
 $(FILELIST): $(OVERRIDELIST)
 	rm -f $(TMP_DIR)/info/.files-$(SCAN_TARGET)-*
-	$(call FIND_L, $(SCAN_DIR)) $(SCAN_EXTRA) -mindepth 1 $(if $(SCAN_DEPTH),-maxdepth $(SCAN_DEPTH)) -name Makefile | xargs grep -aHE 'call $(GREP_STRING)' | sed -e 's#^$(SCAN_DIR)/##' -e 's#/Makefile:.*##' | uniq | awk -v of=$(OVERRIDELIST) -f include/scan.awk > $@
+	find -L $(SCAN_DIR) $(SCAN_EXTRA) -mindepth 1 $(if $(SCAN_DEPTH),-maxdepth $(SCAN_DEPTH)) -name Makefile | xargs grep -aHE 'call $(GREP_STRING)' | sed -e 's#^$(SCAN_DIR)/##' -e 's#/Makefile:.*##' | uniq | awk -v of=$(OVERRIDELIST) -f include/scan.awk > $@
 
 $(TMP_DIR)/info/.files-$(SCAN_TARGET).mk: $(FILELIST)
 	( \
@@ -85,7 +101,7 @@ $(TMP_DIR)/info/.files-$(SCAN_TARGET).mk: $(FILELIST)
 $(TARGET_STAMP)::
 	+( \
 		$(NO_TRACE_MAKE) $(FILELIST); \
-		MD5SUM=$$(cat $(FILELIST) $(OVERRIDELIST) | (md5sum || md5) 2>/dev/null | awk '{print $$1}'); \
+		MD5SUM=$$(cat $(FILELIST) $(OVERRIDELIST) | $(MKHASH) md5 | awk '{print $$1}'); \
 		[ -f "$@.$$MD5SUM" ] || { \
 			rm -f $@.*; \
 			touch $@.$$MD5SUM; \

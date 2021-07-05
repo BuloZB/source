@@ -11,11 +11,12 @@ use strict;
 use warnings;
 use File::Basename;
 use File::Copy;
+use Text::ParseWords;
 
 @ARGV > 2 or die "Syntax: $0 <target dir> <filename> <hash> <url filename> [<mirror> ...]\n";
 
 my $url_filename;
-my $target = shift @ARGV;
+my $target = glob(shift @ARGV);
 my $filename = shift @ARGV;
 my $file_hash = shift @ARGV;
 $url_filename = shift @ARGV unless $ARGV[0] =~ /:\/\//;
@@ -64,21 +65,35 @@ sub hash_cmd() {
 	my $len = length($file_hash);
 	my $cmd;
 
-	$len == 64 and return "openssl dgst -sha256 | sed -e 's,.*= ,,'";
-	$len == 32 and do {
-		my $cmd = which("md5sum") || which("md5") || die 'no md5 checksum program found, please install md5 or md5sum';
-		chomp $cmd;
-		return $cmd;
-	};
+	$len == 64 and return "$ENV{'MKHASH'} sha256";
+	$len == 32 and return "$ENV{'MKHASH'} md5";
 	return undef;
 }
 
+sub download_cmd($) {
+	my $url = shift;
+	my $have_curl = 0;
+
+	if (open CURL, '-|', 'curl', '--version') {
+		if (defined(my $line = readline CURL)) {
+			$have_curl = 1 if $line =~ /^curl /;
+		}
+		close CURL;
+	}
+
+	return $have_curl
+		? (qw(curl -f --connect-timeout 20 --retry 5 --location --insecure), shellwords($ENV{CURL_OPTIONS} || ''), $url)
+		: (qw(wget --tries=5 --timeout=20 --no-check-certificate --output-document=-), shellwords($ENV{WGET_OPTIONS} || ''), $url)
+	;
+}
+
 my $hash_cmd = hash_cmd();
+$hash_cmd or ($file_hash eq "skip") or die "Cannot find appropriate hash command, ensure the provided hash is either a MD5 or SHA256 checksum.\n";
 
 sub download
 {
 	my $mirror = shift;
-	my $options = $ENV{WGET_OPTIONS} || "";
+	my $download_filename = shift;
 
 	$mirror =~ s!/$!!;
 
@@ -125,18 +140,20 @@ sub download
 			}
 		};
 	} else {
-		open WGET, "wget -t5 --timeout=20 --no-check-certificate $options -O- '$mirror/$url_filename' |" or die "Cannot launch wget.\n";
+		my @cmd = download_cmd("$mirror/$download_filename");
+		print STDERR "+ ".join(" ",@cmd)."\n";
+		open(FETCH_FD, '-|', @cmd) or die "Cannot launch curl or wget.\n";
 		$hash_cmd and do {
 			open MD5SUM, "| $hash_cmd > '$target/$filename.hash'" or die "Cannot launch $hash_cmd.\n";
 		};
 		open OUTPUT, "> $target/$filename.dl" or die "Cannot create file $target/$filename.dl: $!\n";
 		my $buffer;
-		while (read WGET, $buffer, 1048576) {
+		while (read FETCH_FD, $buffer, 1048576) {
 			$hash_cmd and print MD5SUM $buffer;
 			print OUTPUT $buffer;
 		}
 		$hash_cmd and close MD5SUM;
-		close WGET;
+		close FETCH_FD;
 		close OUTPUT;
 
 		if ($? >> 8) {
@@ -152,7 +169,7 @@ sub download
 		$sum = $1;
 
 		if ($sum ne $file_hash) {
-			print STDERR "MD5 sum of the downloaded file does not match (file: $sum, requested: $file_hash) - deleting download.\n";
+			print STDERR "Hash of the downloaded file does not match (file: $sum, requested: $file_hash) - deleting download.\n";
 			cleanup();
 			return;
 		}
@@ -175,13 +192,20 @@ foreach my $mirror (@ARGV) {
 	if ($mirror =~ /^\@SF\/(.+)$/) {
 		# give sourceforge a few more tries, because it redirects to different mirrors
 		for (1 .. 5) {
-			push @mirrors, "http://downloads.sourceforge.net/$1";
+			push @mirrors, "https://downloads.sourceforge.net/$1";
 		}
+	} elsif ($mirror =~ /^\@OPENWRT$/) {
+		# use OpenWrt source server directly
+	} elsif ($mirror =~ /^\@DEBIAN\/(.+)$/) {
+		push @mirrors, "https://ftp.debian.org/debian/$1";
+		push @mirrors, "https://mirror.leaseweb.com/debian/$1";
+		push @mirrors, "https://mirror.netcologne.de/debian/$1";
 	} elsif ($mirror =~ /^\@APACHE\/(.+)$/) {
 		push @mirrors, "https://mirror.netcologne.de/apache.org/$1";
 		push @mirrors, "https://mirror.aarnet.edu.au/pub/apache/$1";
+		push @mirrors, "https://mirror.csclub.uwaterloo.ca/apache/$1";
+		push @mirrors, "https://archive.apache.org/dist/$1";
 		push @mirrors, "http://mirror.cogentco.com/pub/apache/$1";
-		push @mirrors, "http://mirror.csclub.uwaterloo.ca/apache/$1";
 		push @mirrors, "http://mirror.navercorp.com/apache/$1";
 		push @mirrors, "http://ftp.jaist.ac.jp/pub/apache/$1";
 		push @mirrors, "ftp://apache.cs.utah.edu/apache.org/$1";
@@ -192,21 +216,20 @@ foreach my $mirror (@ARGV) {
 			push @mirrors, "https://raw.githubusercontent.com/$1";
 		}
 	} elsif ($mirror =~ /^\@GNU\/(.+)$/) {
-		push @mirrors, "https://mirrors.rit.edu/gnu/$1";
+		push @mirrors, "https://mirror.csclub.uwaterloo.ca/gnu/$1";
 		push @mirrors, "https://mirror.netcologne.de/gnu/$1";
 		push @mirrors, "http://ftp.kddilabs.jp/GNU/gnu/$1";
 		push @mirrors, "http://www.nic.funet.fi/pub/gnu/gnu/$1";
 		push @mirrors, "http://mirror.internode.on.net/pub/gnu/$1";
 		push @mirrors, "http://mirror.navercorp.com/gnu/$1";
-		push @mirrors, "ftp://mirror.csclub.uwaterloo.ca/gnu/$1";
+		push @mirrors, "ftp://mirrors.rit.edu/gnu/$1";
 		push @mirrors, "ftp://download.xs4all.nl/pub/gnu/";
 	} elsif ($mirror =~ /^\@SAVANNAH\/(.+)$/) {
 		push @mirrors, "https://mirror.netcologne.de/savannah/$1";
-		push @mirrors, "http://mirror.csclub.uwaterloo.ca/nongnu/$1";
+		push @mirrors, "https://mirror.csclub.uwaterloo.ca/nongnu/$1";
 		push @mirrors, "http://ftp.acc.umu.se/mirror/gnu.org/savannah/$1";
 		push @mirrors, "http://nongnu.uib.no/$1";
 		push @mirrors, "http://ftp.igh.cnrs.fr/pub/nongnu/$1";
-		push @mirrors, "http://public.p-knowledge.co.jp/Savannah-nongnu-mirror/$1";
 		push @mirrors, "ftp://cdimage.debian.org/mirror/gnu.org/savannah/$1";
 		push @mirrors, "ftp://ftp.acc.umu.se/mirror/gnu.org/savannah/$1";
 	} elsif ($mirror =~ /^\@KERNEL\/(.+)$/) {
@@ -215,19 +238,19 @@ foreach my $mirror (@ARGV) {
 			push @extra, "$extra[0]/testing";
 		} elsif ($filename =~ /linux-(\d+\.\d+(?:\.\d+)?)/) {
 			push @extra, "$extra[0]/longterm/v$1";
-		}		
+		}
 		foreach my $dir (@extra) {
 			push @mirrors, "https://cdn.kernel.org/pub/$dir";
-			push @mirrors, "https://mirror.rackspace.com/kernel.org/$dir";
-			push @mirrors, "http://download.xs4all.nl/ftp.kernel.org/pub/$dir";
-			push @mirrors, "http://mirrors.mit.edu/kernel/$dir";
+			push @mirrors, "https://download.xs4all.nl/ftp.kernel.org/pub/$dir";
+			push @mirrors, "https://mirrors.mit.edu/kernel/$dir";
 			push @mirrors, "http://ftp.nara.wide.ad.jp/pub/kernel.org/$dir";
 			push @mirrors, "http://www.ring.gr.jp/archives/linux/kernel.org/$dir";
 			push @mirrors, "ftp://ftp.riken.jp/Linux/kernel.org/$dir";
 			push @mirrors, "ftp://www.mirrorservice.org/sites/ftp.kernel.org/pub/$dir";
 		}
-    } elsif ($mirror =~ /^\@GNOME\/(.+)$/) {
-		push @mirrors, "http://mirror.csclub.uwaterloo.ca/gnome/sources/$1";
+	} elsif ($mirror =~ /^\@GNOME\/(.+)$/) {
+		push @mirrors, "https://download.gnome.org/sources/$1";
+		push @mirrors, "https://mirror.csclub.uwaterloo.ca/gnome/sources/$1";
 		push @mirrors, "http://ftp.acc.umu.se/pub/GNOME/sources/$1";
 		push @mirrors, "http://ftp.kaist.ac.kr/gnome/sources/$1";
 		push @mirrors, "http://www.mirrorservice.org/sites/ftp.gnome.org/pub/GNOME/sources/$1";
@@ -235,23 +258,41 @@ foreach my $mirror (@ARGV) {
 		push @mirrors, "http://ftp.belnet.be/ftp.gnome.org/sources/$1";
 		push @mirrors, "ftp://ftp.cse.buffalo.edu/pub/Gnome/sources/$1";
 		push @mirrors, "ftp://ftp.nara.wide.ad.jp/pub/X11/GNOME/sources/$1";
-    }
-    else {
+	} else {
 		push @mirrors, $mirror;
 	}
 }
 
-#push @mirrors, 'http://mirror1.openwrt.org';
-push @mirrors, 'http://sources.lede-project.org';
-push @mirrors, 'http://mirror2.openwrt.org/sources';
-push @mirrors, 'http://downloads.openwrt.org/sources';
+push @mirrors, 'https://sources.cdn.openwrt.org';
+push @mirrors, 'https://sources.openwrt.org';
+push @mirrors, 'https://mirror2.openwrt.org/sources';
+
+if (-f "$target/$filename") {
+	$hash_cmd and do {
+		if (system("cat '$target/$filename' | $hash_cmd > '$target/$filename.hash'")) {
+			die "Failed to generate hash for $filename\n";
+		}
+
+		my $sum = `cat "$target/$filename.hash"`;
+		$sum =~ /^(\w+)\s*/ or die "Could not generate file hash\n";
+		$sum = $1;
+
+		cleanup();
+		exit 0 if $sum eq $file_hash;
+
+		die "Hash of the local file $filename does not match (file: $sum, requested: $file_hash) - deleting download.\n";
+		unlink "$target/$filename";
+	};
+}
 
 while (!-f "$target/$filename") {
 	my $mirror = shift @mirrors;
 	$mirror or die "No more mirrors to try - giving up.\n";
 
-	download($mirror);
+	download($mirror, $url_filename);
+	if (!-f "$target/$filename" && $url_filename ne $filename) {
+		download($mirror, $filename);
+	}
 }
 
 $SIG{INT} = \&cleanup;
-

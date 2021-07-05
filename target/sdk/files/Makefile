@@ -14,7 +14,8 @@ export TOPDIR LC_ALL LANG SDK
 
 world:
 
-include $(TOPDIR)/include/host.mk
+DISTRO_PKG_CONFIG:=$(shell which -a pkg-config | grep -E '\/usr' | head -n 1)
+export PATH:=$(TOPDIR)/staging_dir/host/bin:$(PATH)
 
 ifneq ($(OPENWRT_BUILD),1)
   override OPENWRT_BUILD=1

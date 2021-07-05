@@ -13,10 +13,9 @@ gre_generic_setup() {
 	local local="$3"
 	local remote="$4"
 	local link="$5"
-	local mtu ttl tos zone ikey okey icsum ocsum iseqno oseqno multicast
-	json_get_vars mtu ttl tos zone ikey okey icsum ocsum iseqno oseqno multicast
+	local mtu ipv6 ttl tos zone ikey okey icsum ocsum iseqno oseqno multicast
+	json_get_vars mtu ipv6 ttl tos zone ikey okey icsum ocsum iseqno oseqno multicast
 
-	[ -z "$zone" ] && zone="wan"
 	[ -z "$multicast" ] && multicast=1
 
 	proto_init_update "$link" 1
@@ -24,14 +23,25 @@ gre_generic_setup() {
 	proto_add_tunnel
 	json_add_string mode "$mode"
 	json_add_int mtu "${mtu:-1280}"
+	json_add_boolean ipv6 "${ipv6:-1}"
 	[ -n "$df" ] && json_add_boolean df "$df"
-	json_add_int ttl "${ttl:-64}"
+	[ -n "$ttl" ] && json_add_int ttl "$ttl"
 	[ -n "$tos" ] && json_add_string tos "$tos"
 	json_add_boolean multicast "$multicast"
 	json_add_string local "$local"
 	json_add_string remote "$remote"
 	[ -n "$tunlink" ] && json_add_string link "$tunlink"
-	json_add_string info "${ikey:-0},${okey:-0},${icsum:-0},${ocsum:-0},${iseqno:-0},${oseqno:-0}"
+
+	json_add_object 'data'
+	[ -n "$ikey" ] && json_add_int ikey "$ikey"
+	[ -n "$okey" ] && json_add_int okey "$okey"
+	[ -n "$icsum" ] && json_add_boolean icsum "$icsum"
+	[ -n "$ocsum" ] && json_add_boolean ocsum "$ocsum"
+	[ -n "$iseqno" ] && json_add_boolean iseqno "$iseqno"
+	[ -n "$oseqno" ] && json_add_boolean oseqno "$oseqno"
+	[ -n "$encaplimit" ] && json_add_string encaplimit "$encaplimit"
+	json_close_object
+
 	proto_close_tunnel
 
 	proto_add_data
@@ -47,7 +57,7 @@ gre_setup() {
 	local remoteip
 
 	local ipaddr peeraddr
-	json_get_vars df ipaddr peeraddr tunlink
+	json_get_vars df ipaddr peeraddr tunlink nohostroute
 
 	[ -z "$peeraddr" ] && {
 		proto_notify_error "$cfg" "MISSING_PEER_ADDRESS"
@@ -67,7 +77,9 @@ gre_setup() {
 		break
 	done
 
-	( proto_add_host_dependency "$cfg" "$peeraddr" "$tunlink" )
+	if [ "${nohostroute}" != "1" ]; then
+		( proto_add_host_dependency "$cfg" "$peeraddr" "$tunlink" )
+	fi
 
 	[ -z "$ipaddr" ] && {
 		local wanif="$tunlink"
@@ -84,7 +96,14 @@ gre_setup() {
 
 	[ -z "$df" ] && df="1"
 
-	gre_generic_setup $cfg $mode $ipaddr $peeraddr "gre-$cfg"
+	case "$mode" in
+		gretapip)
+			gre_generic_setup $cfg $mode $ipaddr $peeraddr "gre4t-$cfg"
+			;;
+		*)
+			gre_generic_setup $cfg $mode $ipaddr $peeraddr "gre4-$cfg"
+			;;
+	esac
 }
 
 proto_gre_setup() {
@@ -102,7 +121,7 @@ proto_gretap_setup() {
 	gre_setup $cfg "gretapip"
 
 	json_init
-	json_add_string name "gre-$cfg"
+	json_add_string name "gre4t-$cfg"
 	json_add_boolean link-ext 0
 	json_close_object
 
@@ -117,7 +136,7 @@ grev6_setup() {
 	local remoteip6
 
 	local ip6addr peer6addr weakif
-	json_get_vars ip6addr peer6addr tunlink weakif
+	json_get_vars ip6addr peer6addr tunlink weakif encaplimit nohostroute
 
 	[ -z "$peer6addr" ] && {
 		proto_notify_error "$cfg" "MISSING_PEER_ADDRESS"
@@ -137,7 +156,9 @@ grev6_setup() {
 		break
 	done
 
-	( proto_add_host_dependency "$cfg" "$peer6addr" "$tunlink" )
+	if [ "${nohostroute}" != "1" ]; then
+		( proto_add_host_dependency "$cfg" "$peer6addr" "$tunlink" )
+	fi
 
 	[ -z "$ip6addr" ] && {
 		local wanif="$tunlink"
@@ -155,7 +176,14 @@ grev6_setup() {
 		fi
 	}
 
-	gre_generic_setup $cfg $mode $ip6addr $peer6addr "grev6-$cfg"
+	case "$mode" in
+		gretapip6)
+			gre_generic_setup $cfg $mode $ip6addr $peer6addr "gre6t-$cfg"
+			;;
+		*)
+			gre_generic_setup $cfg $mode $ip6addr $peer6addr "gre6-$cfg"
+			;;
+	esac
 }
 
 proto_grev6_setup() {
@@ -173,7 +201,7 @@ proto_grev6tap_setup() {
 	grev6_setup $cfg "gretapip6"
 
 	json_init
-	json_add_string name "grev6-$cfg"
+	json_add_string name "gre6t-$cfg"
 	json_add_boolean link-ext 0
 	json_close_object
 
@@ -203,7 +231,7 @@ proto_gre_teardown() {
 proto_gretap_teardown() {
 	local cfg="$1"
 
-	gretap_generic_teardown "gre-$cfg"
+	gretap_generic_teardown "gre4t-$cfg"
 }
 
 proto_grev6_teardown() {
@@ -213,7 +241,7 @@ proto_grev6_teardown() {
 proto_grev6tap_teardown() {
 	local cfg="$1"
 
-	gretap_generic_teardown "grev6-$cfg"
+	gretap_generic_teardown "gre6t-$cfg"
 }
 
 gre_generic_init_config() {
@@ -221,6 +249,7 @@ gre_generic_init_config() {
 	available=1
 
 	proto_config_add_int "mtu"
+	proto_config_add_boolean "ipv6"
 	proto_config_add_int "ttl"
 	proto_config_add_string "tos"
 	proto_config_add_string "tunlink"
@@ -239,6 +268,7 @@ proto_gre_init_config() {
 	proto_config_add_string "ipaddr"
 	proto_config_add_string "peeraddr"
 	proto_config_add_boolean "df"
+	proto_config_add_boolean "nohostroute"
 }
 
 proto_gretap_init_config() {
@@ -251,6 +281,8 @@ proto_grev6_init_config() {
 	proto_config_add_string "ip6addr"
 	proto_config_add_string "peer6addr"
 	proto_config_add_string "weakif"
+	proto_config_add_string "encaplimit"
+	proto_config_add_boolean "nohostroute"
 }
 
 proto_grev6tap_init_config() {
@@ -259,8 +291,6 @@ proto_grev6tap_init_config() {
 }
 
 [ -n "$INCLUDE_ONLY" ] || {
-	[ -f /lib/modules/$(uname -r)/gre.ko ] && add_protocol gre
-	[ -f /lib/modules/$(uname -r)/gre.ko ] && add_protocol gretap
-	[ -f /lib/modules/$(uname -r)/ip6_gre.ko ] && add_protocol grev6
-	[ -f /lib/modules/$(uname -r)/ip6_gre.ko ] && add_protocol grev6tap
+	[ -d /sys/module/ip_gre ] && { add_protocol gre; add_protocol gretap; }
+	[ -d /sys/module/ip6_gre ] && { add_protocol grev6; add_protocol grev6tap; }
 }

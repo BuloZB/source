@@ -40,6 +40,7 @@
 #include <linux/proc_fs.h>
 #include <linux/init.h>
 #include <linux/ioctl.h>
+#include <linux/platform_device.h>
 #include <asm/delay.h>
 
 /*
@@ -49,14 +50,6 @@
 #include "ifxmips_atm_fw_amazon_se.h"
 
 #include <lantiq_soc.h>
-
-#define EMA_CMD_BUF_LEN      0x0040
-#define EMA_CMD_BASE_ADDR    (0x00001580 << 2)
-#define EMA_DATA_BUF_LEN     0x0100
-#define EMA_DATA_BASE_ADDR   (0x00001900 << 2)
-#define EMA_WRITE_BURST      0x2
-#define EMA_READ_BURST       0x2
-
 
 
 /*
@@ -88,7 +81,7 @@
  */
 static inline void init_pmu(void);
 static inline void uninit_pmu(void);
-static inline void reset_ppe(void);
+static inline void reset_ppe(struct platform_device *pdev);
 static inline void init_ema(void);
 static inline void init_mailbox(void);
 static inline void init_atm_tc(void);
@@ -144,7 +137,7 @@ static inline void uninit_pmu(void)
     //PPE_TOP_PMU_SETUP(IFX_PMU_DISABLE);*/
 }
 
-static inline void reset_ppe(void)
+static inline void reset_ppe(struct platform_device *pdev)
 {
 #if 0 //MODULE
     unsigned int etop_cfg;
@@ -270,11 +263,11 @@ extern void ase_fw_ver(unsigned int *major, unsigned int *minor)
     *minor = FW_VER_ID->minor;
 }
 
-void ase_init(void)
+void ase_init(struct platform_device *pdev)
 {
     init_pmu();
 
-    reset_ppe();
+    reset_ppe(pdev);
 
     init_ema();
 

@@ -103,8 +103,8 @@ int main(int argc, char** argv)
   unsigned long start, i;
   char *endptr, *buffer, *p;
   int count;  // size of file in bytes
-  unsigned short sum, sum1;
-  char sumbuf[9];
+  unsigned short sum = 0, sum1 = 0;
+  char sumbuf[8 + 8 + 1];
 
   if(argc < 3) {
     printf("ERROR: Argument missing!\n\nUsage %s filename starting offset in hex [PID code]\n\n", argv[0]);
@@ -117,7 +117,7 @@ int main(int argc, char** argv)
     printf("ERROR: File not writeable!\n");
     return 1;
   }
-  if(argc = 4)
+  if(argc == 4)
   {
     printf("%s: PID type: %s\n", argv[0], argv[3]);
     if(strcmp(argv[3], "DE")==0)
@@ -147,7 +147,6 @@ int main(int argc, char** argv)
 
   start = strtol(argv[2], &endptr, 16);
   p = buffer+start;
-  sum1 = 0;
   for(i = 0; i < count - start; i++)
   {
 	sum1 += p[i];

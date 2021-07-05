@@ -101,14 +101,17 @@ $(eval $(call KernelPackage,lib-crc32c))
 define KernelPackage/lib-lzo
   SUBMENU:=$(LIB_MENU)
   TITLE:=LZO support
+  DEPENDS:=+kmod-crypto-acompress
   KCONFIG:= \
+	CONFIG_CRYPTO_LZO \
 	CONFIG_LZO_COMPRESS \
 	CONFIG_LZO_DECOMPRESS
   HIDDEN:=1
   FILES:= \
+	$(LINUX_DIR)/crypto/lzo.ko \
 	$(LINUX_DIR)/lib/lzo/lzo_compress.ko \
 	$(LINUX_DIR)/lib/lzo/lzo_decompress.ko
-  AUTOLOAD:=$(call AutoProbe,lzo_compress lzo_decompress)
+  AUTOLOAD:=$(call AutoProbe,lzo lzo_compress lzo_decompress)
 endef
 
 define KernelPackage/lib-lzo/description
@@ -118,17 +121,43 @@ endef
 $(eval $(call KernelPackage,lib-lzo))
 
 
+define KernelPackage/lib-zstd
+  SUBMENU:=$(LIB_MENU)
+  TITLE:=ZSTD support
+  DEPENDS:=+kmod-crypto-acompress
+  KCONFIG:= \
+	CONFIG_CRYPTO_ZSTD \
+	CONFIG_ZSTD_COMPRESS \
+	CONFIG_ZSTD_DECOMPRESS \
+	CONFIG_XXHASH
+  FILES:= \
+	$(LINUX_DIR)/crypto/zstd.ko \
+	$(LINUX_DIR)/lib/xxhash.ko \
+	$(LINUX_DIR)/lib/zstd/zstd_compress.ko \
+	$(LINUX_DIR)/lib/zstd/zstd_decompress.ko
+  AUTOLOAD:=$(call AutoProbe,xxhash zstd zstd_compress zstd_decompress)
+endef
+
+define KernelPackage/lib-zstd/description
+ Kernel module for ZSTD compression/decompression support
+endef
+
+$(eval $(call KernelPackage,lib-zstd))
+
+
 define KernelPackage/lib-lz4
   SUBMENU:=$(LIB_MENU)
   TITLE:=LZ4 support
-  HIDDEN:=1
+  DEPENDS:=+kmod-crypto-acompress
   KCONFIG:= \
+	CONFIG_CRYPTO_LZ4 \
 	CONFIG_LZ4_COMPRESS \
 	CONFIG_LZ4_DECOMPRESS
   FILES:= \
+	$(LINUX_DIR)/crypto/lz4.ko \
 	$(LINUX_DIR)/lib/lz4/lz4_compress.ko \
 	$(LINUX_DIR)/lib/lz4/lz4_decompress.ko
-  AUTOLOAD:=$(call AutoProbe,lz4_compress lz4_decompress)
+  AUTOLOAD:=$(call AutoProbe,lz4 lz4_compress lz4_decompress)
 endef
 
 define KernelPackage/lib-lz4/description
@@ -159,10 +188,10 @@ define KernelPackage/lib-xor
   TITLE:=XOR blocks algorithm support
   HIDDEN:=1
   KCONFIG:=CONFIG_XOR_BLOCKS
-ifneq ($(wildcard $(LINUX_DIR)/arch/arm/lib/xor-neon.ko),)
+ifneq ($(wildcard $(LINUX_DIR)/arch/$(LINUX_KARCH)/lib/xor-neon.ko),)
   FILES:= \
     $(LINUX_DIR)/crypto/xor.ko \
-    $(LINUX_DIR)/arch/arm/lib/xor-neon.ko
+    $(LINUX_DIR)/arch/$(LINUX_KARCH)/lib/xor-neon.ko
   AUTOLOAD:=$(call AutoProbe,xor-neon xor)
 else
   FILES:=$(LINUX_DIR)/crypto/xor.ko
@@ -195,27 +224,35 @@ endef
 $(eval $(call KernelPackage,lib-textsearch))
 
 
-define KernelPackage/lib-zlib
+define KernelPackage/lib-zlib-inflate
   SUBMENU:=$(LIB_MENU)
   TITLE:=Zlib support
   HIDDEN:=1
-  KCONFIG:= \
-    CONFIG_ZLIB_DEFLATE \
-    CONFIG_ZLIB_INFLATE
-  FILES:= \
-    $(LINUX_DIR)/lib/zlib_deflate/zlib_deflate.ko \
-    $(LINUX_DIR)/lib/zlib_inflate/zlib_inflate.ko
-  AUTOLOAD:=$(call AutoProbe,zlib_deflate zlib_inflate)
+  KCONFIG:=CONFIG_ZLIB_INFLATE
+  FILES:=$(LINUX_DIR)/lib/zlib_inflate/zlib_inflate.ko
+  AUTOLOAD:=$(call AutoProbe,zlib_inflate)
 endef
 
-$(eval $(call KernelPackage,lib-zlib))
+$(eval $(call KernelPackage,lib-zlib-inflate))
+
+
+define KernelPackage/lib-zlib-deflate
+  SUBMENU:=$(LIB_MENU)
+  TITLE:=Zlib support
+  HIDDEN:=1
+  KCONFIG:=CONFIG_ZLIB_DEFLATE
+  FILES:=$(LINUX_DIR)/lib/zlib_deflate/zlib_deflate.ko
+  AUTOLOAD:=$(call AutoProbe,zlib_deflate)
+endef
+
+$(eval $(call KernelPackage,lib-zlib-deflate))
 
 
 define KernelPackage/lib-cordic
   SUBMENU:=$(LIB_MENU)
   TITLE:=Cordic function support
   KCONFIG:=CONFIG_CORDIC
-  FILES:=$(LINUX_DIR)/lib/cordic.ko
+  FILES:=$(LINUX_DIR)/lib/math/cordic.ko
   AUTOLOAD:=$(call AutoProbe,cordic)
 endef
 
@@ -224,3 +261,14 @@ define KernelPackage/lib-cordic/description
 endef
 
 $(eval $(call KernelPackage,lib-cordic))
+
+
+define KernelPackage/asn1-decoder
+  SUBMENU:=$(LIB_MENU)
+  TITLE:=Simple ASN1 decoder
+  KCONFIG:= CONFIG_ASN1
+  HIDDEN:=1
+  FILES:=$(LINUX_DIR)/lib/asn1_decoder.ko
+endef
+
+$(eval $(call KernelPackage,asn1-decoder))

@@ -7,25 +7,6 @@
 
 FS_MENU:=Filesystems
 
-define KernelPackage/fs-fscache
-  SUBMENU:=$(FS_MENU)
-  TITLE:=General filesystem local cache manager
-  DEPENDS:=
-  KCONFIG:=\
-	CONFIG_FSCACHE=m \
-	CONFIG_FSCACHE_STATS=y \
-	CONFIG_FSCACHE_HISTOGRAM=n \
-	CONFIG_FSCACHE_DEBUG=n \
-	CONFIG_FSCACHE_OBJECT_LIST=n \
-	CONFIG_CACHEFILES=y \
-	CONFIG_CACHEFILES_DEBUG=n \
-	CONFIG_CACHEFILES_HISTOGRAM=n
-  FILES:=$(LINUX_DIR)/fs/fscache/fscache.ko
-  AUTOLOAD:=$(call AutoLoad,29,fscache)
-endef
-
-$(eval $(call KernelPackage,fs-fscache))
-
 define KernelPackage/fs-9p
   SUBMENU:=$(FS_MENU)
   TITLE:=Plan 9 Resource Sharing Support
@@ -44,6 +25,7 @@ define KernelPackage/fs-9p/description
 endef
 
 $(eval $(call KernelPackage,fs-9p))
+
 
 define KernelPackage/fs-afs
   SUBMENU:=$(FS_MENU)
@@ -67,8 +49,11 @@ $(eval $(call KernelPackage,fs-afs))
 define KernelPackage/fs-autofs4
   SUBMENU:=$(FS_MENU)
   TITLE:=AUTOFS4 filesystem support
-  KCONFIG:=CONFIG_AUTOFS4_FS
-  FILES:=$(LINUX_DIR)/fs/autofs4/autofs4.ko
+  KCONFIG:= \
+	CONFIG_AUTOFS4_FS \
+	CONFIG_AUTOFS_FS
+  FILES:= \
+	$(LINUX_DIR)/fs/autofs/autofs4.ko
   AUTOLOAD:=$(call AutoLoad,30,autofs4)
 endef
 
@@ -82,7 +67,7 @@ $(eval $(call KernelPackage,fs-autofs4))
 define KernelPackage/fs-btrfs
   SUBMENU:=$(FS_MENU)
   TITLE:=BTRFS filesystem support
-  DEPENDS:=+kmod-lib-crc32c +kmod-lib-lzo +kmod-lib-zlib +kmod-lib-raid6 +kmod-lib-xor
+  DEPENDS:=+kmod-lib-crc32c +kmod-lib-lzo +kmod-lib-zlib-inflate +kmod-lib-zlib-deflate +kmod-lib-raid6 +kmod-lib-xor +kmod-lib-zstd
   KCONFIG:=\
 	CONFIG_BTRFS_FS \
 	CONFIG_BTRFS_FS_POSIX_ACL=n \
@@ -104,19 +89,23 @@ define KernelPackage/fs-cifs
   TITLE:=CIFS support
   KCONFIG:= \
 	CONFIG_CIFS \
-	CONFIG_CIFS_XATTR=y \
 	CONFIG_CIFS_DFS_UPCALL=n \
 	CONFIG_CIFS_UPCALL=n
   FILES:=$(LINUX_DIR)/fs/cifs/cifs.ko
   AUTOLOAD:=$(call AutoLoad,30,cifs)
   $(call AddDepends/nls)
   DEPENDS+= \
-    +kmod-crypto-hmac \
-    +kmod-crypto-md5 \
     +kmod-crypto-md4 \
-    +kmod-crypto-des \
+    +kmod-crypto-md5 \
+    +kmod-crypto-sha256 \
+    +kmod-crypto-sha512 \
+    +kmod-crypto-cmac \
+    +kmod-crypto-hmac \
+    +kmod-crypto-arc4 \
+    +kmod-crypto-aead \
+    +kmod-crypto-ccm \
     +kmod-crypto-ecb \
-    +kmod-crypto-sha256
+    +kmod-crypto-des
 endef
 
 define KernelPackage/fs-cifs/description
@@ -141,10 +130,11 @@ endef
 
 $(eval $(call KernelPackage,fs-configfs))
 
+
 define KernelPackage/fs-cramfs
   SUBMENU:=$(FS_MENU)
   TITLE:=Compressed RAM/ROM filesystem support
-  DEPENDS:=+kmod-lib-zlib
+  DEPENDS:=+kmod-lib-zlib-inflate
   KCONFIG:= \
 	CONFIG_CRAMFS
   FILES:=$(LINUX_DIR)/fs/cramfs/cramfs.ko
@@ -156,6 +146,43 @@ define KernelPackage/fs-cramfs/description
 endef
 
 $(eval $(call KernelPackage,fs-cramfs))
+
+
+define KernelPackage/fs-efivarfs
+  SUBMENU:=$(FS_MENU)
+  TITLE:=efivar filesystem support
+  KCONFIG:=CONFIG_EFIVAR_FS
+  FILES:=$(LINUX_DIR)/fs/efivarfs/efivarfs.ko
+  DEPENDS:=@(x86_64||x86)
+  AUTOLOAD:=$(call Autoload,90,efivarfs)
+endef
+
+define KernelPackage/fs-efivarfs/description
+  Kernel module to support efivarfs file system mountpoint.
+endef
+
+$(eval $(call KernelPackage,fs-efivarfs))
+
+
+define KernelPackage/fs-exfat
+  SUBMENU:=$(FS_MENU)
+  TITLE:=exFAT filesystem support
+  KCONFIG:= \
+	CONFIG_EXFAT_FS \
+	CONFIG_EXFAT_DEFAULT_IOCHARSET="utf8"
+  FILES:= \
+	$(LINUX_DIR)/drivers/staging/exfat/exfat.ko@lt5.7 \
+	$(LINUX_DIR)/fs/exfat/exfat.ko@ge5.7
+  AUTOLOAD:=$(call AutoLoad,30,exfat,1)
+  DEPENDS:=+kmod-nls-base
+endef
+
+define KernelPackage/fs-exfat/description
+ Kernel module for exFAT filesystem support
+endef
+
+$(eval $(call KernelPackage,fs-exfat))
+
 
 define KernelPackage/fs-exportfs
   SUBMENU:=$(FS_MENU)
@@ -200,13 +227,8 @@ $(eval $(call KernelPackage,fs-ext4))
 define KernelPackage/fs-f2fs
   SUBMENU:=$(FS_MENU)
   TITLE:=F2FS filesystem support
-  KCONFIG:= \
-	CONFIG_F2FS_FS \
-	CONFIG_F2FS_STAT_FS=y \
-	CONFIG_F2FS_FS_XATTR=y \
-	CONFIG_F2FS_FS_POSIX_ACL=n \
-	CONFIG_F2FS_FS_SECURITY=n \
-	CONFIG_F2FS_CHECK_FS=n
+  DEPENDS:= +kmod-crypto-hash +kmod-crypto-crc32 +kmod-nls-base
+  KCONFIG:=CONFIG_F2FS_FS
   FILES:=$(LINUX_DIR)/fs/f2fs/f2fs.ko
   AUTOLOAD:=$(call AutoLoad,30,f2fs,1)
 endef
@@ -218,24 +240,30 @@ endef
 $(eval $(call KernelPackage,fs-f2fs))
 
 
-define KernelPackage/fuse
+define KernelPackage/fs-fscache
   SUBMENU:=$(FS_MENU)
-  TITLE:=FUSE (Filesystem in Userspace) support
-  KCONFIG:= CONFIG_FUSE_FS
-  FILES:=$(LINUX_DIR)/fs/fuse/fuse.ko
-  AUTOLOAD:=$(call AutoLoad,80,fuse)
+  TITLE:=General filesystem local cache manager
+  DEPENDS:=
+  KCONFIG:=\
+	CONFIG_FSCACHE=m \
+	CONFIG_FSCACHE_STATS=y \
+	CONFIG_FSCACHE_HISTOGRAM=n \
+	CONFIG_FSCACHE_DEBUG=n \
+	CONFIG_FSCACHE_OBJECT_LIST=n \
+	CONFIG_CACHEFILES=y \
+	CONFIG_CACHEFILES_DEBUG=n \
+	CONFIG_CACHEFILES_HISTOGRAM=n
+  FILES:=$(LINUX_DIR)/fs/fscache/fscache.ko
+  AUTOLOAD:=$(call AutoLoad,29,fscache)
 endef
 
-define KernelPackage/fuse/description
- Kernel module for userspace filesystem support
-endef
-
-$(eval $(call KernelPackage,fuse))
+$(eval $(call KernelPackage,fs-fscache))
 
 
 define KernelPackage/fs-hfs
   SUBMENU:=$(FS_MENU)
   TITLE:=HFS filesystem support
+  DEPENDS:=+kmod-cdrom
   KCONFIG:=CONFIG_HFS_FS
   FILES:=$(LINUX_DIR)/fs/hfs/hfs.ko
   AUTOLOAD:=$(call AutoLoad,30,hfs)
@@ -252,6 +280,7 @@ $(eval $(call KernelPackage,fs-hfs))
 define KernelPackage/fs-hfsplus
   SUBMENU:=$(FS_MENU)
   TITLE:=HFS+ filesystem support
+  DEPENDS:=+kmod-cdrom
   KCONFIG:=CONFIG_HFSPLUS_FS
   FILES:=$(LINUX_DIR)/fs/hfsplus/hfsplus.ko
   AUTOLOAD:=$(call AutoLoad,30,hfsplus)
@@ -268,7 +297,7 @@ $(eval $(call KernelPackage,fs-hfsplus))
 define KernelPackage/fs-isofs
   SUBMENU:=$(FS_MENU)
   TITLE:=ISO9660 filesystem support
-  DEPENDS:=+kmod-lib-zlib
+  DEPENDS:=+kmod-lib-zlib-inflate +kmod-cdrom
   KCONFIG:=CONFIG_ISO9660_FS CONFIG_JOLIET=y CONFIG_ZISOFS=n
   FILES:=$(LINUX_DIR)/fs/isofs/isofs.ko
   AUTOLOAD:=$(call AutoLoad,30,isofs)
@@ -281,6 +310,21 @@ endef
 
 $(eval $(call KernelPackage,fs-isofs))
 
+
+define KernelPackage/fs-jfs
+  SUBMENU:=$(FS_MENU)
+  TITLE:=JFS filesystem support
+  KCONFIG:=CONFIG_JFS_FS
+  FILES:=$(LINUX_DIR)/fs/jfs/jfs.ko
+  AUTOLOAD:=$(call AutoLoad,30,jfs,1)
+  $(call AddDepends/nls)
+endef
+
+define KernelPackage/fs-jfs/description
+ Kernel module for JFS support
+endef
+
+$(eval $(call KernelPackage,fs-jfs))
 
 define KernelPackage/fs-minix
   SUBMENU:=$(FS_MENU)
@@ -316,20 +360,19 @@ $(eval $(call KernelPackage,fs-msdos))
 
 define KernelPackage/fs-nfs
   SUBMENU:=$(FS_MENU)
-  TITLE:=NFS filesystem support
+  TITLE:=NFS filesystem client support
   DEPENDS:=+kmod-fs-nfs-common +kmod-dnsresolver
   KCONFIG:= \
 	CONFIG_NFS_FS \
 	CONFIG_NFS_USE_LEGACY_DNS=n \
 	CONFIG_NFS_USE_NEW_IDMAPPER=n
   FILES:= \
-	$(LINUX_DIR)/fs/nfs/nfs.ko \
-	$(LINUX_DIR)/fs/nfs/nfsv3.ko
-  AUTOLOAD:=$(call AutoLoad,40,nfs nfsv3)
+	$(LINUX_DIR)/fs/nfs/nfs.ko
+  AUTOLOAD:=$(call AutoLoad,40,nfs)
 endef
 
 define KernelPackage/fs-nfs/description
- Kernel module for NFS support
+ Kernel module for NFS client support
 endef
 
 $(eval $(call KernelPackage,fs-nfs))
@@ -345,38 +388,89 @@ define KernelPackage/fs-nfs-common
   FILES:= \
 	$(LINUX_DIR)/fs/lockd/lockd.ko \
 	$(LINUX_DIR)/net/sunrpc/sunrpc.ko \
-	$(LINUX_DIR)/fs/nfs_common/grace.ko
+	$(LINUX_DIR)/fs/nfs_common/grace.ko \
+	$(LINUX_DIR)/fs/nfs_common/nfs_ssc.ko@ge5.10
   AUTOLOAD:=$(call AutoLoad,30,grace sunrpc lockd)
 endef
 
 $(eval $(call KernelPackage,fs-nfs-common))
 
 
-define KernelPackage/fs-nfs-common-v4
+define KernelPackage/fs-nfs-common-rpcsec
   SUBMENU:=$(FS_MENU)
-  TITLE:=Common NFS V4 filesystem modules
-  KCONFIG+=\
-	CONFIG_SUNRPC_GSS\
-	CONFIG_NFS_V4=y\
-	CONFIG_NFSD_V4=y
-  DEPENDS:= @BROKEN
-  FILES+=$(LINUX_DIR)/net/sunrpc/auth_gss/auth_rpcgss.ko
-  AUTOLOAD=$(call AutoLoad,30,auth_rpcgss)
+  TITLE:=NFS Secure RPC
+  DEPENDS:= \
+	+kmod-fs-nfs-common \
+	+kmod-crypto-des \
+	+kmod-crypto-cbc \
+	+kmod-crypto-cts \
+	+kmod-crypto-md5 \
+	+kmod-crypto-sha1 \
+	+kmod-crypto-hmac \
+	+kmod-crypto-ecb \
+	+kmod-crypto-arc4
+  KCONFIG:= \
+	CONFIG_SUNRPC_GSS \
+	CONFIG_RPCSEC_GSS_KRB5
+  FILES:= \
+	$(LINUX_DIR)/lib/oid_registry.ko \
+	$(LINUX_DIR)/net/sunrpc/auth_gss/auth_rpcgss.ko \
+	$(LINUX_DIR)/net/sunrpc/auth_gss/rpcsec_gss_krb5.ko
+  AUTOLOAD:=$(call AutoLoad,31,oid_registry auth_rpcgss rpcsec_gss_krb5)
 endef
 
-define KernelPackage/fs-nfs-common-v4/description
- Kernel modules for NFS V4 & NFSD V4 kernel support
+define KernelPackage/fs-nfs-common-rpcsec/description
+ Kernel modules for NFS Secure RPC
 endef
 
-$(eval $(call KernelPackage,fs-nfs-common-v4))
+$(eval $(call KernelPackage,fs-nfs-common-rpcsec))
+
+
+define KernelPackage/fs-nfs-v3
+  SUBMENU:=$(FS_MENU)
+  TITLE:=NFS3 filesystem client support
+  DEPENDS:=+kmod-fs-nfs
+  FILES:= \
+	$(LINUX_DIR)/fs/nfs/nfsv3.ko
+  AUTOLOAD:=$(call AutoLoad,41,nfsv3)
+endef
+
+define KernelPackage/fs-nfs-v3/description
+ Kernel module for NFS v3 client support
+endef
+
+$(eval $(call KernelPackage,fs-nfs-v3))
+
+
+define KernelPackage/fs-nfs-v4
+  SUBMENU:=$(FS_MENU)
+  TITLE:=NFS4 filesystem client support
+  DEPENDS:=+kmod-fs-nfs
+  KCONFIG:= \
+	CONFIG_NFS_V4=y
+  FILES:= \
+	$(LINUX_DIR)/fs/nfs/nfsv4.ko
+  AUTOLOAD:=$(call AutoLoad,41,nfsv4)
+endef
+
+define KernelPackage/fs-nfs-v4/description
+ Kernel module for NFS v4 client support
+endef
+
+$(eval $(call KernelPackage,fs-nfs-v4))
 
 
 define KernelPackage/fs-nfsd
   SUBMENU:=$(FS_MENU)
   TITLE:=NFS kernel server support
-  DEPENDS:=+kmod-fs-nfs-common +kmod-fs-exportfs
+  DEPENDS:=+kmod-fs-nfs-common +kmod-fs-exportfs +kmod-fs-nfs-common-rpcsec
   KCONFIG:= \
 	CONFIG_NFSD \
+	CONFIG_NFSD_V4=y \
+	CONFIG_NFSD_V4_SECURITY_LABEL=n \
+	CONFIG_NFSD_BLOCKLAYOUT=n \
+	CONFIG_NFSD_SCSILAYOUT=n \
+	CONFIG_NFSD_FLEXFILELAYOUT=n \
 	CONFIG_NFSD_FAULT_INJECTION=n
   FILES:=$(LINUX_DIR)/fs/nfsd/nfsd.ko
   AUTOLOAD:=$(call AutoLoad,40,nfsd)
@@ -408,8 +502,7 @@ $(eval $(call KernelPackage,fs-ntfs))
 define KernelPackage/fs-reiserfs
   SUBMENU:=$(FS_MENU)
   TITLE:=ReiserFS filesystem support
-  KCONFIG:=CONFIG_REISERFS_FS \
-	CONFIG_REISERFS_FS_XATTR=y
+  KCONFIG:=CONFIG_REISERFS_FS
   FILES:=$(LINUX_DIR)/fs/reiserfs/reiserfs.ko
   AUTOLOAD:=$(call AutoLoad,30,reiserfs,1)
 endef
@@ -443,7 +536,7 @@ define KernelPackage/fs-udf
   KCONFIG:=CONFIG_UDF_FS
   FILES:=$(LINUX_DIR)/fs/udf/udf.ko
   AUTOLOAD:=$(call AutoLoad,30,udf)
-  DEPENDS:=+kmod-lib-crc-itu-t
+  DEPENDS:=+kmod-lib-crc-itu-t +kmod-cdrom
   $(call AddDepends/nls)
 endef
 
@@ -490,17 +583,16 @@ endef
 $(eval $(call KernelPackage,fs-xfs))
 
 
-define KernelPackage/fs-jfs
+define KernelPackage/fuse
   SUBMENU:=$(FS_MENU)
-  TITLE:=JFS filesystem support
-  KCONFIG:=CONFIG_JFS_FS
-  FILES:=$(LINUX_DIR)/fs/jfs/jfs.ko
-  AUTOLOAD:=$(call AutoLoad,30,jfs,1)
-  $(call AddDepends/nls)
+  TITLE:=FUSE (Filesystem in Userspace) support
+  KCONFIG:= CONFIG_FUSE_FS
+  FILES:=$(LINUX_DIR)/fs/fuse/fuse.ko
+  AUTOLOAD:=$(call AutoLoad,80,fuse)
 endef
 
-define KernelPackage/fs-jfs/description
- Kernel module for JFS support
+define KernelPackage/fuse/description
+ Kernel module for userspace filesystem support
 endef
 
-$(eval $(call KernelPackage,fs-jfs))
+$(eval $(call KernelPackage,fuse))
