@@ -71,7 +71,7 @@ endef
 # 4: optional link library test (example -lncurses)
 define RequireCHeader
   define Require/$(1)
-    echo 'int main(int argc, char **argv) { $(3); return 0; }' | gcc -include $(1) -x c -o $(TMP_DIR)/a.out - $(4)
+    echo 'int main(int argc, char **argv) { $(3); return 0; }' | $(STAGING_DIR_HOST)/bin/gcc -include $(1) -x c -o $(TMP_DIR)/a.out - $(4)
   endef
 
   $$(eval $$(call Require,$(1),$(2)))
@@ -107,20 +107,13 @@ define SetupHostCommand
 			bin="$$$$$$$$(command -v "$$$$$$$${cmd%% *}")"; \
 			if [ -x "$$$$$$$$bin" ] && eval "$$$$$$$$cmd" >/dev/null 2>/dev/null; then \
 				case "$$$$$$$$(ls -dl -- $(STAGING_DIR_HOST)/bin/$(strip $(1)))" in \
-					*" -> $$$$$$$$bin"*) \
-						[ -x "$(STAGING_DIR_HOST)/bin/$(strip $(1))" ] && exit 0 \
-						;; \
-					"-"*) \
-						find "$(STAGING_DIR_HOST)/stamp" | grep $(strip $(1)) && \
-						[ -x "$(STAGING_DIR_HOST)/bin/$(strip $(1))" ] && exit 0 \
-						;; \
-					*" -> /"*) \
-						;; \
-					*" -> "*) \
+					"-"* | \
+					*" -> $$$$$$$$bin"* | \
+					*" -> "[!/]*) \
 						[ -x "$(STAGING_DIR_HOST)/bin/$(strip $(1))" ] && exit 0 \
 						;; \
 				esac; \
-				ln -sf "$$$$$$$$bin" "$(STAGING_DIR_HOST)/bin/$(strip $(1))"; \
+				ln -sf "$$$$$$$${bin#$(STAGING_DIR_HOST)/bin/}" "$(STAGING_DIR_HOST)/bin/$(strip $(1))"; \
 				exit 1; \
 			fi; \
 		fi; \
